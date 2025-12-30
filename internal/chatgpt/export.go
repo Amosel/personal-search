@@ -22,20 +22,22 @@ type Conversation struct {
 	Mapping map[string]Message `json:"mapping,omitempty"`
 }
 
-// Message represents a single message in the conversation.
+// Message represents a single message node in the conversation mapping.
+// This is the outer wrapper in the mapping structure.
 type Message struct {
-	ID         string   `json:"id"`
-	Message    *MsgBody `json:"message,omitempty"`
-	CreateTime float64  `json:"create_time,omitempty"`
-	Parent     string   `json:"parent,omitempty"`
+	ID      string   `json:"id"`
+	Message *MsgBody `json:"message,omitempty"`
+	Parent  string   `json:"parent,omitempty"`
 }
 
 // MsgBody contains the actual message content.
+// In real ChatGPT exports, create_time lives HERE at the message body level.
 type MsgBody struct {
-	ID       string         `json:"id,omitempty"`
-	Author   Author         `json:"author"`
-	Content  Content        `json:"content"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	ID         string         `json:"id,omitempty"`
+	Author     Author         `json:"author"`
+	Content    Content        `json:"content"`
+	CreateTime float64        `json:"create_time,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 // Author identifies who sent the message.

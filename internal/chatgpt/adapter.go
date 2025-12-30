@@ -34,11 +34,13 @@ func ToDocuments(e *Export) ([]model.Document, error) {
 
 		// Sort by create_time for deterministic ordering
 		sort.Slice(msgs, func(i, j int) bool {
-			if msgs[i].CreateTime == msgs[j].CreateTime {
+			iTime := msgs[i].Message.CreateTime
+			jTime := msgs[j].Message.CreateTime
+			if iTime == jTime {
 				// Stable sort for identical timestamps
 				return msgs[i].ID < msgs[j].ID
 			}
-			return msgs[i].CreateTime < msgs[j].CreateTime
+			return iTime < jTime
 		})
 
 		// Convert each message to a Document
@@ -52,7 +54,7 @@ func ToDocuments(e *Export) ([]model.Document, error) {
 			}
 
 			// Convert timestamp to unix milliseconds
-			timestampMs := int64(m.CreateTime * 1000)
+			timestampMs := int64(m.Message.CreateTime * 1000)
 
 			// DEFECT: INVALID_TIMESTAMP → skip
 			if timestampMs <= 0 {
