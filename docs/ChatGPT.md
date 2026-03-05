@@ -15,7 +15,7 @@ This document does not redefine source-level behavior.
 * Conversations are **containers**, not semantic units
 
 **Design decision:**
-➡️ **Each message becomes one Document**
+➡️ **Each valid non-system message becomes one Document**
 (conversation/thread is metadata only)
 
 ---
@@ -44,7 +44,7 @@ It **must not**:
 
 | ChatGPT Field   | Document Field     | Notes                    |
 | --------------- | ------------------ | ------------------------ |
-| conversation_id | metadata.thread_id | Stable grouping          |
+| conversation.id | metadata.thread_id | Stable grouping          |
 | message.id      | id                 | Deterministic            |
 | role            | metadata.author    | `"user"` / `"assistant"` |
 | content.text    | text               | Canonicalized            |
@@ -57,8 +57,8 @@ It **must not**:
 
 ```text
 id = sha256(
-  source="chatgpt" +
   conversation_id +
+  "|" +
   message_id
 )
 ```
@@ -117,8 +117,7 @@ Embeddings must represent *what was said*, not *how it was stored*.
 
 ## 1.7 Adapter Acceptance Criteria
 
-* [ ] Every message → exactly one Document
-* [ ] No missing timestamps
+* [ ] Non-system messages with valid timestamp + non-empty canonical text become Documents
 * [ ] IDs stable across runs
 * [ ] Re-ingestion produces identical output
 * [ ] No embeddings generated here

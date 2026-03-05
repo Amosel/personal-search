@@ -50,6 +50,54 @@ LAYER 7 (Validation)
 
 ---
 
+## Current Status (Updated)
+
+### Task Completion Matrix
+
+| Task | Status | Notes |
+|------|--------|-------|
+| T1: Docker/Qdrant Setup | PARTIAL | Qdrant tested via ad-hoc Docker run; no committed `docker-compose.yml` yet. |
+| T2: Go Module Init | DONE | Module and layout in place. |
+| T3: Canonical Document Model | DONE | `internal/model/document.go` + tests. |
+| T4: Embedder Interface | DONE | `internal/embed/embedder.go`. |
+| T5: Filter Model | DONE | `internal/model/filters.go` implemented with validation. |
+| T6: Document ID Generator | DONE | `internal/model/id.go` + tests. |
+| T7: Text Canonicalizer | DONE | `internal/chatgpt/canonicalize.go` + tests. |
+| T8: ChatGPT Export Parser | DONE | JSON + ZIP support in `internal/chatgpt/export.go`. |
+| T9: ChatGPT Adapter | PARTIAL | Working adapter and tests; still contains skip-on-invalid behavior instead of strict fail-fast on all invalid records. |
+| T10: OpenAI Embedder | DONE | `internal/embed/openai.go` + tests. |
+| T11: Qdrant REST Client | DONE | `internal/qdrant/client.go`. |
+| T12: Collection Manager | DONE | `internal/qdrant/collection.go`. |
+| T13: Upsert Handler | DONE | `internal/qdrant/upsert.go`. |
+| T14: Search Handler | DONE | `internal/qdrant/search.go`. |
+| T15: Filter-to-Qdrant Translator | DONE | Implemented in `cmd/server/main.go` (`buildQdrantFilter`). |
+| T16: Ingestion CLI | DONE | `cmd/ingest_chatgpt/main.go` with `openai|fake` embedder modes. |
+| T17: Search Server | DONE | `cmd/server/main.go` with `/health` and `POST /search`. |
+| T18: Test Fixtures | DONE | Fixture implemented at `internal/integration/testdata/chatgpt_export_valid.json`. |
+| T19: Integration Tests | DONE | Implemented suite in `internal/integration/*` including acceptance + E2E CLI + E2E HTTP flow. |
+
+### Acceptance/E2E Test Entry Points
+
+```bash
+# Full integration suite (includes acceptance criteria checks)
+go test ./internal/integration -v -count=1
+
+# Focused acceptance gate
+go test ./internal/integration -run TestAcceptance_E2E -v -count=1
+
+# Real ChatGPT export snapshot test (requires env var)
+CHATGPT_EXPORT_PATH="/absolute/path/to/conversations.json" \
+  go test ./internal/chatgpt -run TestSnapshot_RealExport -v -count=1
+```
+
+### Remaining High-Priority Gaps
+
+1. Make T9 fully fail-fast (no silent skips for empty canonical text / invalid timestamps).
+2. Add committed local infra bootstrap (`docker-compose.yml`) to make T1 reproducible.
+3. Add CI target for `internal/integration` acceptance suite.
+
+---
+
 ## Task Specifications
 
 ### T1: Docker/Qdrant Setup

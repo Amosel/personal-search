@@ -6,6 +6,18 @@
 * Search API: `POST /search` (MCP-friendly contract)
 * Deterministic IDs and re-ingestion safe upserts
 
+### Current Repository Status (March 2026)
+
+Implemented in repo:
+- `cmd/ingest_chatgpt` end-to-end ingest (ChatGPT export -> embeddings -> Qdrant upsert)
+- `cmd/server` with `/health` and `POST /search`
+- Qdrant client/collection/upsert/search helpers in `internal/qdrant`
+- Integration acceptance suite in `internal/integration`
+
+Available embedder modes:
+- `openai` for real semantic embeddings
+- `fake` deterministic embedder for local integration tests and CI
+
 ### Source Boundary
 
 ChatGPT export ingestion is split into two layers:
@@ -930,16 +942,38 @@ This is the tool surface your agent calls (your server implements it).
 docker compose up -d
 ```
 
+If this repository does not yet include a committed `docker-compose.yml`, use:
+
+```bash
+docker run -d --name personal-search-qdrant -p 6333:6333 qdrant/qdrant:latest
+```
+
 2. Ingest ChatGPT export
 
 ```bash
 go run ./cmd/ingest_chatgpt --export /path/to/chatgpt_export.json --openai_key "$OPENAI_API_KEY" --dim 3072
 ```
 
+For deterministic local test mode (no OpenAI key):
+
+```bash
+go run ./cmd/ingest_chatgpt \
+  --export internal/integration/testdata/chatgpt_export_valid.json \
+  --embedder fake \
+  --dim 16 \
+  --batch 2
+```
+
 3. Run server
 
 ```bash
 go run ./cmd/server --openai_key "$OPENAI_API_KEY" --dim 3072
+```
+
+Deterministic local test mode:
+
+```bash
+go run ./cmd/server --embedder fake --dim 16
 ```
 
 4. Query
@@ -949,6 +983,23 @@ curl -s localhost:8080/search \
   -H 'Content-Type: application/json' \
   -d '{"query":"parental alienation patterns","filters":{"source":["chatgpt"],"date":{"from":"2024-01-01","to":"2024-12-31"}},"limit":10}' | jq
 ```
+
+---
+
+## 11.1 Acceptance Test Gate
+
+```bash
+# No cached test results
+go test ./internal/integration -run TestAcceptance_E2E -v -count=1
+```
+
+This gate validates:
+- ingest -> search happy path
+- request validation errors
+- deterministic top result (fake embedder)
+- idempotent re-ingest
+- source/author/thread/date filters
+- empty collection behavior
 
 ---
 

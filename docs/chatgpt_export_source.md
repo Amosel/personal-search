@@ -48,13 +48,13 @@ If both formats fail, the source MUST return an error.
 ### File Loading
 
 The source MUST:
-- Load the entire file into memory before parsing
+- Open the input path (JSON) or ZIP entry (`conversations.json`)
+- Decode JSON using `json.Decoder` (streaming decode)
 - Return an error if the file does not exist
 - Return an error if the file is not readable
 - Return an error if JSON parsing fails
 
 The source MUST NOT:
-- Stream or incrementally parse the file
 - Attempt recovery from malformed JSON
 - Silently skip unparseable content
 
@@ -98,19 +98,24 @@ The source MUST NOT reorder conversations.
 
 ---
 
-## Fail-Fast Rules
+## Error/Skip Rules
 
 ### The source MUST return an error and halt if:
 
 - The file does not exist
 - The file cannot be read
 - JSON is malformed
-- A message has empty text after canonicalization
 - Document validation fails for any message
+
+### The source skips individual messages (continues processing) when:
+
+- `message` field is null
+- `author.role == "system"`
+- Canonicalized text is empty
+- `create_time <= 0` (after conversion to unix ms)
 
 ### The source MUST NOT:
 
-- Skip invalid messages and continue
 - Log warnings and proceed
 - Provide partial results on error
 - Attempt fallback or recovery strategies
@@ -125,7 +130,7 @@ Before text is used, the source MUST:
 - Collapse excessive blank lines (max 1 consecutive)
 - Extract text from `content.parts` or `content.text`
 
-If canonicalized text is empty (whitespace-only), the source MUST return an error.
+If canonicalized text is empty (whitespace-only), the source skips that message.
 
 The source MUST NOT:
 - Summarize, truncate, or rewrite text
@@ -202,15 +207,11 @@ Across multiple invocations, the source MUST be deterministic.
 
 ## Error Reporting
 
-Errors MUST include:
-- The conversation ID (if known)
-- The message ID (if known)
+Errors SHOULD include:
 - The underlying cause
+- Conversation and message IDs when available
 
-Errors MUST NOT include:
-- Message content (privacy)
-- Full file paths (security)
-- Stack traces in production
+Errors SHOULD NOT include message content (privacy).
 
 ---
 
@@ -271,11 +272,7 @@ The following defects may be encountered in ChatGPT export data. Each has a defi
 |------------|---------------|----------|--------|
 | `INVALID_TIMESTAMP` | `create_time` ≤ 0, null, or missing | `skip` | Skip message, continue processing |
 | `EMPTY_TEXT_AFTER_CANON` | Canonicalized text is empty string | `skip` | Skip message, continue processing |
-| `MISSING_ROLE` | `author.role` is null or missing | `skip` | Skip message, continue processing |
-| `UNKNOWN_ROLE` | `author.role` not in `{user, assistant, system}` | `skip` | Skip message, continue processing |
 | `MALFORMED_MESSAGE_NODE` | `message` field is null | `skip` | Skip message, continue processing |
-| `UNSUPPORTED_CONTENT_TYPE` | `content.content_type` not "text" | `skip` | Skip message, continue processing |
-| `DUPLICATE_MESSAGE_ID` | Message ID seen before in same conversation | `skip` | Skip duplicate, continue processing |
 | `UNORDERED_CREATE_TIME` | `create_time` < previous message in conversation | `coerce` | Sort enforces ordering |
 | `MISSING_CONVERSATION_ID` | Conversation has no `id` field | `fatal` | Halt ingestion with error |
 
