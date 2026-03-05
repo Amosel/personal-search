@@ -1,0 +1,60 @@
+{
+  "conversations": [
+    {
+      "id": "conv-alpha",
+      "title": "Custody planning",
+      "mapping": {
+        "msg-1": {
+          "id": "msg-1",
+          "message": {
+            "author": { "role": "user" },
+            "create_time": 1735603200,
+            "content": {
+              "content_type": "text",
+              "parts": ["custody strategy planning notes and timeline"]
+            }
+          }
+        },
+        "msg-2": {
+          "id": "msg-2",
+          "message": {
+            "author": { "role": "assistant" },
+            "create_time": 1735603260,
+            "content": {
+              "content_type": "text",
+              "parts": ["organize legal documents and calendar milestones"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "conv-beta",
+      "title": "Groceries",
+      "mapping": {
+        "msg-3": {
+          "id": "msg-3",
+          "message": {
+            "author": { "role": "user" },
+            "create_time": 1704067200,
+            "content": {
+              "content_type": "text",
+              "parts": ["buy milk eggs and bread this weekend"]
+            }
+          }
+        },
+        "msg-4": {
+          "id": "msg-4",
+          "message": {
+            "author": { "role": "assistant" },
+            "create_time": 1704067260,
+            "content": {
+              "content_type": "text",
+              "parts": ["create a compact shopping list and budget"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
