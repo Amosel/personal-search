@@ -954,6 +954,17 @@ docker run -d --name personal-search-qdrant -p 6333:6333 qdrant/qdrant:latest
 go run ./cmd/ingest_chatgpt --export /path/to/chatgpt_export.json --openai_key "$OPENAI_API_KEY" --dim 3072
 ```
 
+Use `--max_docs` to run low-cost semantic smoke ingests:
+
+```bash
+go run ./cmd/ingest_chatgpt \
+  --export /path/to/chatgpt_export.json \
+  --openai_key "$OPENAI_API_KEY" \
+  --dim 1536 \
+  --model text-embedding-3-small \
+  --max_docs 500
+```
+
 For deterministic local test mode (no OpenAI key):
 
 ```bash
@@ -1003,9 +1014,26 @@ This gate validates:
 
 ---
 
+## 11.2 Local One-Command Play Loop
+
+```bash
+make smoke
+```
+
+This starts/uses local Qdrant, ingests fixture data, starts the server, and runs a sample query.
+
+Semantic quality comparison (`fake` vs `openai` on same subset):
+
+```bash
+export CHATGPT_EXPORT_PATH="/absolute/path/to/conversations.json"
+export OPENAI_API_KEY="..."
+make semantic-smoke
+```
+
+---
+
 ## 12) Known limitations (intentional, next increments)
 
-* `filters.source` currently uses only the first value (extend to Qdrant `should` OR clause)
 * `keywords` filter is stubbed (add keyword extraction + payload)
 * No lexical BM25 fallback yet (add later for exact match anchoring)
 * Query embedding uses OpenAI (swap to local embedder once desired)

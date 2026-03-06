@@ -23,7 +23,8 @@ type FieldCondition struct {
 }
 
 type Filter struct {
-	Must []any `json:"must,omitempty"`
+	Must   []any `json:"must,omitempty"`
+	Should []any `json:"should,omitempty"`
 }
 
 type SearchRequest struct {

@@ -203,6 +203,22 @@ func TestAcceptance_E2E(t *testing.T) {
 		}
 	})
 
+	t.Run("Filter_SourceOr", func(t *testing.T) {
+		status, out := doSearchJSON(t, addr, model.SearchRequest{
+			Query: "shopping list budget",
+			Limit: 5,
+			Filters: &model.Filters{
+				Source: []string{"email", "chatgpt"},
+			},
+		})
+		if status != http.StatusOK {
+			t.Fatalf("expected 200, got %d", status)
+		}
+		if len(out.Results) == 0 {
+			t.Fatal("expected non-empty results with source OR filter")
+		}
+	})
+
 	t.Run("EmptyCollectionReturnsEmptyResults", func(t *testing.T) {
 		emptyCollection := fmt.Sprintf("itest_acceptance_empty_%d", time.Now().UnixNano())
 		if err := qc.EnsureCollection(ctx, emptyCollection, 16); err != nil {

@@ -148,11 +148,15 @@ func buildQdrantFilter(f *model.Filters) *qdrant.Filter {
 	}
 
 	must := make([]any, 0, 4)
+	should := make([]any, 0, 2)
 
-	if len(f.Source) > 0 && f.Source[0] != "" {
-		must = append(must, qdrant.FieldCondition{
+	for _, src := range f.Source {
+		if src == "" {
+			continue
+		}
+		should = append(should, qdrant.FieldCondition{
 			Key:   "source",
-			Match: &qdrant.MatchValue{Value: f.Source[0]},
+			Match: &qdrant.MatchValue{Value: src},
 		})
 	}
 	if f.Author != "" {
@@ -191,9 +195,18 @@ func buildQdrantFilter(f *model.Filters) *qdrant.Filter {
 	}
 
 	if len(must) == 0 {
-		return nil
+		if len(should) == 0 {
+			return nil
+		}
+		return &qdrant.Filter{Should: should}
 	}
-	return &qdrant.Filter{Must: must}
+	if len(should) == 0 {
+		return &qdrant.Filter{Must: must}
+	}
+	return &qdrant.Filter{
+		Must:   must,
+		Should: should,
+	}
 }
 
 func payloadString(payload map[string]any, key string) string {

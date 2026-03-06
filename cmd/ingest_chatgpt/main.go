@@ -22,6 +22,7 @@ func main() {
 		modelName  = flag.String("model", "text-embedding-3-large", "OpenAI embedding model")
 		dim        = flag.Int("dim", 3072, "Embedding dimension")
 		batchSize  = flag.Int("batch", 64, "Embedding batch size")
+		maxDocs    = flag.Int("max_docs", 0, "Optional cap on number of documents to ingest (0 = all)")
 	)
 	flag.Parse()
 
@@ -33,6 +34,9 @@ func main() {
 	}
 	if *batchSize <= 0 {
 		fatal("--batch must be > 0")
+	}
+	if *maxDocs < 0 {
+		fatal("--max_docs must be >= 0")
 	}
 
 	emb, err := buildEmbedder(*embedder, *openaiKey, *modelName, *dim)
@@ -52,6 +56,9 @@ func main() {
 	}
 	if len(docs) == 0 {
 		fatal("no documents produced from export")
+	}
+	if *maxDocs > 0 && len(docs) > *maxDocs {
+		docs = docs[:*maxDocs]
 	}
 
 	qc := qdrant.New(*qdrantURL)
