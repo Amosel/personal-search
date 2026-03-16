@@ -107,7 +107,7 @@ type Document struct {
 	Timestamp int64             `json:"timestamp_unix_ms"`
 	Text      string            `json:"text"`
 	Metadata  map[string]any    `json:"metadata"`
-	Keywords  []string          `json:"keywords,omitempty"` // optional (exact/derived)
+	Keywords  []string          `json:"keywords,omitempty"` // reserved for future enrichment
 }
 ```
 
@@ -123,7 +123,7 @@ type DateRange struct {
 type Filters struct {
 	Source   []string  `json:"source,omitempty"`
 	Date     *DateRange `json:"date,omitempty"`
-	Keywords []string  `json:"keywords,omitempty"`
+	Keywords []string  `json:"keywords,omitempty"` // unsupported in current search API
 	Author   string    `json:"author,omitempty"`
 	ThreadID string    `json:"thread_id,omitempty"`
 }
@@ -884,7 +884,7 @@ func buildQdrantFilter(f *model.Filters) *qdrant.Filter {
 		})
 	}
 
-	// keywords: reference implementation expects payload["keywords"] as array; not set yet.
+	// keywords: reserved; current server rejects keyword-filtered requests.
 	// You can add keyword extraction later; for now treat as no-op or implement lexical layer.
 	// (Kept here to preserve contract.)
 
@@ -904,7 +904,7 @@ This is the tool surface your agent calls (your server implements it).
 ```json
 {
   "name": "search_documents",
-  "description": "Semantic search over personal indexed documents with optional deterministic filters (source/date/author/thread/keywords).",
+  "description": "Semantic search over personal indexed documents with optional deterministic filters (source/date/author/thread).",
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -920,7 +920,6 @@ This is the tool surface your agent calls (your server implements it).
               "to":   { "type": "string", "description": "YYYY-MM-DD" }
             }
           },
-          "keywords": { "type": "array", "items": { "type": "string" } },
           "author": { "type": "string" },
           "thread_id": { "type": "string" }
         }
@@ -1034,6 +1033,6 @@ make semantic-smoke
 
 ## 12) Known limitations (intentional, next increments)
 
-* `keywords` filter is stubbed (add keyword extraction + payload)
+* `keywords` filter is unsupported; requests that include it return `400`
 * No lexical BM25 fallback yet (add later for exact match anchoring)
 * Query embedding uses OpenAI (swap to local embedder once desired)

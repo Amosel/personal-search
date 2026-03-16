@@ -169,10 +169,6 @@ No side effects. Idempotent.
           "to": { "type": "string", "format": "date" }
         }
       },
-      "keywords": {
-        "type": "array<string>",
-        "description": "Exact or extracted keywords"
-      },
       "author": {
         "type": "string",
         "description": "user / assistant / email sender"
@@ -215,7 +211,6 @@ No side effects. Idempotent.
       "metadata": {
         "author": "string",
         "thread_id": "string",
-        "keywords": ["string"]
       }
     }
   ]
@@ -224,7 +219,14 @@ No side effects. Idempotent.
 
 ---
 
-## 2.6 Output Guarantees
+## 2.6 Unsupported Filters
+
+`keywords` filtering is not implemented by the current server.
+Requests with `filters.keywords` must fail with `400`.
+
+---
+
+## 2.7 Output Guarantees
 
 * Stable ordering for identical inputs
 * Scores monotonically decreasing
@@ -233,7 +235,7 @@ No side effects. Idempotent.
 
 ---
 
-## 2.7 MCP Alignment Notes
+## 2.8 MCP Alignment Notes
 
 * Stateless
 * Deterministic

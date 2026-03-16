@@ -116,6 +116,18 @@ func TestAcceptance_E2E(t *testing.T) {
 		}
 	})
 
+	t.Run("Validation_KeywordsUnsupported", func(t *testing.T) {
+		status, _ := doSearchJSON(t, addr, model.SearchRequest{
+			Query: "notes",
+			Filters: &model.Filters{
+				Keywords: []string{"custody"},
+			},
+		})
+		if status != http.StatusBadRequest {
+			t.Fatalf("expected 400, got %d", status)
+		}
+	})
+
 	t.Run("Determinism_Top1Stable", func(t *testing.T) {
 		status1, out1 := doSearchJSON(t, addr, model.SearchRequest{Query: "custody strategy", Limit: 5})
 		status2, out2 := doSearchJSON(t, addr, model.SearchRequest{Query: "custody strategy", Limit: 5})
@@ -216,6 +228,11 @@ func TestAcceptance_E2E(t *testing.T) {
 		}
 		if len(out.Results) == 0 {
 			t.Fatal("expected non-empty results with source OR filter")
+		}
+		for _, r := range out.Results {
+			if r.Source != "chatgpt" {
+				t.Fatalf("unexpected source in result: %+v", r)
+			}
 		}
 	})
 

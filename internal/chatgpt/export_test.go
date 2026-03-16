@@ -111,3 +111,33 @@ func TestLoadExport_EmptyArray(t *testing.T) {
 		t.Fatal("Conversations should not be nil")
 	}
 }
+
+func TestLoadExport_ObjectFormatWithExtraFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "export.json")
+
+	content := `{
+		"metadata": {"exported_at":"2026-03-16"},
+		"conversations": [
+			{
+				"id": "conv1",
+				"title": "Test",
+				"mapping": {}
+			}
+		],
+		"extra": ["ignored"]
+	}`
+
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	exp, err := LoadExport(path)
+	if err != nil {
+		t.Fatalf("LoadExport failed: %v", err)
+	}
+
+	if len(exp.Conversations) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(exp.Conversations))
+	}
+}

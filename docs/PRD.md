@@ -12,7 +12,7 @@ Personal digital data (emails, chats, social archives, notes) is:
 The user needs a **fast, local, semantic search substrate** that:
 
 * preserves Monocle-level UX clarity and speed
-* supports semantic queries *plus* deterministic filters (date, source, keywords)
+* supports semantic queries *plus* deterministic filters (date, source, author)
 * is modular, extensible, and MCP-ready
 * is usable incrementally, without big upfront cost
 
@@ -23,7 +23,7 @@ The user needs a **fast, local, semantic search substrate** that:
 ### Goals
 
 * Semantic search over personal data using embeddings
-* Deterministic filtering (date, source, keyword, author)
+* Deterministic filtering (date, source, author)
 * Fast, predictable UX (sub-200ms local queries)
 * Modular ingestion per data source
 * Headless API usable by humans *and* agents
@@ -198,7 +198,7 @@ Embeddings should encode *semantic meaning*, not constraints. Mixing metadata de
   "filters": {
     "source": ["chatgpt", "email"],
     "date": { "from": "2023-01-01", "to": "2024-12-31" },
-    "keywords": ["custody"]
+    "author": "user"
   },
   "limit": 20
 }

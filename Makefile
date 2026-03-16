@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 QDRANT_URL ?= http://localhost:6333
 
-.PHONY: qdrant-up qdrant-down qdrant-status smoke acceptance integration semantic-smoke
+.PHONY: qdrant-up qdrant-down qdrant-status default-status smoke acceptance integration semantic-smoke
 
 qdrant-up:
 	@set -euo pipefail; \
@@ -17,6 +17,16 @@ qdrant-down:
 
 qdrant-status:
 	curl -sf $(QDRANT_URL)/collections | jq .
+
+default-status: qdrant-up
+	@set -euo pipefail; \
+	if ! curl -sf $(QDRANT_URL)/collections/personal_docs >/dev/null 2>&1; then \
+		echo "collection personal_docs missing"; \
+		exit 1; \
+	fi; \
+	curl -sf -X POST $(QDRANT_URL)/collections/personal_docs/points/count \
+		-H "Content-Type: application/json" \
+		-d '{"exact":true}' | jq '.result.count'
 
 smoke: qdrant-up
 	@set -euo pipefail; \

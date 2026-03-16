@@ -131,24 +131,34 @@ func parseJSON(r io.Reader) (*Export, error) {
 
 	// Object format: {conversations: [...]}
 	if delim, ok := t.(json.Delim); ok && delim == '{' {
-		// Read "conversations" key
+		var convs []Conversation
+		foundConversations := false
 		for dec.More() {
 			tok, err := dec.Token()
 			if err != nil {
 				return nil, err
 			}
-			if key, ok := tok.(string); ok && key == "conversations" {
-				// Read array value
-				var convs []Conversation
-				if err := dec.Decode(&convs); err != nil {
+			key, ok := tok.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid object key token %v", tok)
+			}
+			if key != "conversations" {
+				var discard json.RawMessage
+				if err := dec.Decode(&discard); err != nil {
 					return nil, err
 				}
-				// Consume remaining tokens
-				for dec.More() {
-					dec.Token()
-				}
-				return &Export{Conversations: convs}, nil
+				continue
 			}
+			if err := dec.Decode(&convs); err != nil {
+				return nil, err
+			}
+			foundConversations = true
+		}
+		if _, err := dec.Token(); err != nil {
+			return nil, err
+		}
+		if foundConversations {
+			return &Export{Conversations: convs}, nil
 		}
 	}
 

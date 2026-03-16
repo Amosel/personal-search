@@ -23,8 +23,9 @@ func (o *OpenAIEmbedder) Dim() int {
 }
 
 type openAIRequest struct {
-	Model string   `json:"model"`
-	Input []string `json:"input"`
+	Model      string   `json:"model"`
+	Input      []string `json:"input"`
+	Dimensions *int     `json:"dimensions,omitempty"`
 }
 
 type openAIResponse struct {
@@ -55,6 +56,9 @@ func (o *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 	reqBody := openAIRequest{
 		Model: o.Model,
 		Input: texts,
+	}
+	if o.DimVal > 0 {
+		reqBody.Dimensions = &o.DimVal
 	}
 
 	body, err := json.Marshal(reqBody)

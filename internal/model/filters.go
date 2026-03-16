@@ -43,6 +43,9 @@ func (f *Filters) Validate() error {
 	if err := f.Date.Validate(); err != nil {
 		return err
 	}
+	if len(f.Keywords) > 0 {
+		return fmt.Errorf("keywords filter is not supported")
+	}
 	return nil
 }
 
