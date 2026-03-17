@@ -53,6 +53,9 @@ case "${cmd}" in
       echo "missing query text" >&2
       exit 1
     fi
+    if [[ -n "${CHATGPT_FORMAT:-}" ]]; then
+      exec go run ./cmd/search_chatgpt --server "${CHATGPT_SERVER_URL:-http://127.0.0.1:18080}" --format "${CHATGPT_FORMAT}" --query "${query}"
+    fi
     exec make chatgpt-search "QUERY=${query}"
     ;;
   *)

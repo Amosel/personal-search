@@ -33,6 +33,30 @@ func TestRun_EmitsJSON(t *testing.T) {
 	}
 }
 
+func TestRun_EmitsYAML(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := run(context.Background(), []string{"--query", "custody", "--format", "yaml"}, &stdout, &stderr, fakeSearcher{
+		resp: model.SearchResponse{
+			Results: []model.SearchResult{{
+				ID:        "1",
+				Source:    "chatgpt",
+				Text:      "custody strategy",
+				Timestamp: "2025-01-01T00:00:00Z",
+				Metadata: map[string]any{
+					"author": "assistant",
+				},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "results:") || !strings.Contains(out, `source: "chatgpt"`) {
+		t.Fatalf("expected YAML output, got %s", out)
+	}
+}
+
 type fakeSearcher struct {
 	resp model.SearchResponse
 	err  error
