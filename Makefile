@@ -4,8 +4,13 @@ QDRANT_URL ?= http://localhost:6333
 CHATGPT_COLLECTION ?= chatgpt_messages
 CHATGPT_SERVER_ADDR ?= 127.0.0.1:18080
 CHATGPT_SERVER_URL ?= http://$(CHATGPT_SERVER_ADDR)
+CHATGPT_EMBEDDER ?= ollama
+OLLAMA_URL ?= http://localhost:11434
+OLLAMA_MODEL ?= nomic-embed-text:latest
+CHATGPT_DIM ?= 0
+CHATGPT_BATCH ?= 8
 
-.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
+.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
 
 qdrant-up:
 	@set -euo pipefail; \
@@ -31,18 +36,45 @@ default-status: qdrant-up
 		-H "Content-Type: application/json" \
 		-d '{"exact":true}' | jq '.result.count'
 
+chatgpt-doctor: qdrant-up
+	@set -euo pipefail; \
+	echo "qdrant=$(QDRANT_URL) ok"; \
+	curl -sf $(OLLAMA_URL)/api/tags >/tmp/chatgpt-ollama-tags.json; \
+	echo "ollama=$(OLLAMA_URL) ok"; \
+	if jq -e --arg model "$(OLLAMA_MODEL)" '.models[] | select(.name == $$model)' /tmp/chatgpt-ollama-tags.json >/dev/null; then \
+		echo "ollama_model=$(OLLAMA_MODEL) ok"; \
+	else \
+		echo "ollama_model=$(OLLAMA_MODEL) missing"; \
+		exit 1; \
+	fi; \
+	if curl -sf $(QDRANT_URL)/collections/$(CHATGPT_COLLECTION) >/dev/null 2>&1; then \
+		count=$$(curl -sf -X POST $(QDRANT_URL)/collections/$(CHATGPT_COLLECTION)/points/count -H "Content-Type: application/json" -d '{"exact":true}' | jq '.result.count'); \
+		echo "collection=$(CHATGPT_COLLECTION) count=$$count"; \
+	else \
+		echo "collection=$(CHATGPT_COLLECTION) missing"; \
+	fi
+
 chatgpt-ingest: qdrant-up
 	@test -n "$(EXPORT)" || (echo "EXPORT=/path/to/chatgpt-export.json-or-zip required" && exit 1)
 	go run ./cmd/ingest_chatgpt \
 		--export "$(EXPORT)" \
 		--qdrant $(QDRANT_URL) \
-		--collection $(CHATGPT_COLLECTION)
+		--collection $(CHATGPT_COLLECTION) \
+		--embedder $(CHATGPT_EMBEDDER) \
+		--ollama_url $(OLLAMA_URL) \
+		--ollama_model $(OLLAMA_MODEL) \
+		--dim $(CHATGPT_DIM) \
+		--batch $(CHATGPT_BATCH)
 
 chatgpt-server: qdrant-up
 	go run ./cmd/server \
 		--addr $(CHATGPT_SERVER_ADDR) \
 		--qdrant $(QDRANT_URL) \
-		--collection $(CHATGPT_COLLECTION)
+		--collection $(CHATGPT_COLLECTION) \
+		--embedder $(CHATGPT_EMBEDDER) \
+		--ollama_url $(OLLAMA_URL) \
+		--ollama_model $(OLLAMA_MODEL) \
+		--dim $(CHATGPT_DIM)
 
 chatgpt-search:
 	@test -n "$(QUERY)" || (echo "QUERY='...'" && exit 1)

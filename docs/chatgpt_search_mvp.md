@@ -13,6 +13,18 @@ Search exported ChatGPT conversations locally through:
 - Qdrant URL: `http://localhost:6333`
 - collection: `chatgpt_messages`
 - server address: `127.0.0.1:18080`
+- embedder: `ollama`
+- Ollama URL: `http://localhost:11434`
+- Ollama model: `nomic-embed-text:latest`
+- Ollama dimension: auto-inferred when `--dim=0`
+
+No OpenAI key required for the default path.
+
+## Doctor
+
+```bash
+make chatgpt-doctor
+```
 
 ## Commands
 

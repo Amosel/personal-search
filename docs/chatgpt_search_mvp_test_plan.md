@@ -21,6 +21,7 @@ Components:
 4. Search can be narrowed by `author`, `thread_id`, and date range.
 5. Unsupported filters fail explicitly.
 6. Skill rollout is auditable and activation can be validated.
+7. Local Ollama path works without OpenAI credentials.
 
 ## Test Matrix
 
@@ -46,6 +47,7 @@ Components:
 - ingest -> server -> MCP search returns ChatGPT results
 - ingest -> server -> MCP filtered search respects `thread_id`
 - ingest -> server -> MCP unsupported `keywords` fails explicitly
+- Ollama dimension auto-detect works when `--dim=0`
 
 ### Skill Governance
 

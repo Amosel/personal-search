@@ -14,15 +14,17 @@ import (
 
 func main() {
 	var (
-		exportPath = flag.String("export", "", "Path to ChatGPT export JSON or ZIP")
-		qdrantURL  = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
-		collection = flag.String("collection", "personal_docs", "Qdrant collection name")
-		embedder   = flag.String("embedder", "openai", "Embedding provider: openai|fake")
-		openaiKey  = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
-		modelName  = flag.String("model", "text-embedding-3-large", "OpenAI embedding model")
-		dim        = flag.Int("dim", 3072, "Embedding dimension")
-		batchSize  = flag.Int("batch", 64, "Embedding batch size")
-		maxDocs    = flag.Int("max_docs", 0, "Optional cap on number of documents to ingest (0 = all)")
+		exportPath  = flag.String("export", "", "Path to ChatGPT export JSON or ZIP")
+		qdrantURL   = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
+		collection  = flag.String("collection", "personal_docs", "Qdrant collection name")
+		embedder    = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
+		openaiKey   = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
+		modelName   = flag.String("model", "text-embedding-3-large", "OpenAI embedding model")
+		ollamaURL   = flag.String("ollama_url", "http://localhost:11434", "Ollama base URL")
+		ollamaModel = flag.String("ollama_model", "nomic-embed-text:latest", "Ollama embedding model")
+		dim         = flag.Int("dim", 0, "Embedding dimension (0 = infer for Ollama)")
+		batchSize   = flag.Int("batch", 64, "Embedding batch size")
+		maxDocs     = flag.Int("max_docs", 0, "Optional cap on number of documents to ingest (0 = all)")
 	)
 	flag.Parse()
 
@@ -39,7 +41,7 @@ func main() {
 		fatal("--max_docs must be >= 0")
 	}
 
-	emb, err := buildEmbedder(*embedder, *openaiKey, *modelName, *dim)
+	emb, err := buildEmbedder(*embedder, *openaiKey, *modelName, *ollamaURL, *ollamaModel, *dim)
 	if err != nil {
 		fatal(err.Error())
 	}
@@ -113,7 +115,7 @@ func main() {
 	fmt.Printf("ingestion complete: %d documents into %s\n", len(docs), *collection)
 }
 
-func buildEmbedder(kind, key, model string, dim int) (embed.Embedder, error) {
+func buildEmbedder(kind, key, model, ollamaURL, ollamaModel string, dim int) (embed.Embedder, error) {
 	switch kind {
 	case "openai":
 		if key == "" {
@@ -132,6 +134,22 @@ func buildEmbedder(kind, key, model string, dim int) (embed.Embedder, error) {
 			return nil, fmt.Errorf("--dim must be > 0")
 		}
 		return &embed.FakeEmbedder{DimVal: dim}, nil
+	case "ollama":
+		if dim == 0 {
+			var err error
+			dim, err = embed.DetectOllamaDimension(context.Background(), ollamaURL, ollamaModel, nil)
+			if err != nil {
+				return nil, fmt.Errorf("infer Ollama dimension: %w", err)
+			}
+		}
+		if dim < 0 {
+			return nil, fmt.Errorf("--dim must be >= 0")
+		}
+		return &embed.OllamaEmbedder{
+			BaseURL: ollamaURL,
+			Model:   ollamaModel,
+			DimVal:  dim,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported --embedder value: %s", kind)
 	}
