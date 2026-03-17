@@ -23,6 +23,7 @@ CHATGPT_FORMAT=yaml ./chatgpt-conversation-search search "custody strategy"
 
 Operator detail:
 - [docs/chatgpt_search_mvp.md](/Users/amoselmaliah/dev/projects/personal-search/docs/chatgpt_search_mvp.md)
+- [docs/README.md](/Users/amoselmaliah/dev/projects/personal-search/docs/README.md)
 
 ## Main Entry Points
 

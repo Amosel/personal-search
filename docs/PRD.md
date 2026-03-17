@@ -1,5 +1,10 @@
 # PRD — Personal Semantic Index & Search Substrate
 
+Status:
+- architectural reference
+- not the fastest operator doc
+- current ChatGPT-only production workflow lives in `README.md` and `docs/chatgpt_search_mvp.md`
+
 ## 1. Problem Statement
 
 Personal digital data (emails, chats, social archives, notes) is:

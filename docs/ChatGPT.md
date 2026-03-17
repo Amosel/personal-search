@@ -3,6 +3,20 @@
 The authoritative specification for ChatGPT export structure, file discovery, and streaming behavior is `docs/chatgpt_export_source.md`.
 This document does not redefine source-level behavior.
 
+Current operator entrypoint:
+- `README.md`
+- `docs/chatgpt_search_mvp.md`
+
+Current production path:
+- ingest: `cmd/ingest_chatgpt`
+- server: `cmd/server`
+- CLI: `cmd/search_chatgpt`
+- MCP: `cmd/mcp_chatgpt_search`
+
+Diagnostic-only binaries:
+- `cmd/ingest`
+- `cmd/analyze`
+
 ## 1.1 Source Characteristics (facts)
 
 * Input: ChatGPT **data export** (JSON)
@@ -77,11 +91,6 @@ id = sha256(
 
 * Flatten content blocks → plain text
 * Preserve paragraph breaks
-* Remove:
-
-  * system prompts
-  * tool call metadata
-  * JSON artifacts
 * Normalize whitespace
 
 ### MUST NOT
@@ -93,6 +102,11 @@ id = sha256(
 
 **Reason:**
 Embeddings must represent *what was said*, not *how it was stored*.
+
+Implementation note:
+- current code skips `system` messages entirely
+- current code canonicalizes text from `content.parts` or `content.text`
+- current code does not attempt a generalized tool-metadata stripping pass beyond those extraction rules
 
 ---
 
@@ -140,7 +154,7 @@ search_documents
 
 ## 2.2 Tool Purpose
 
-> Perform **semantic search over personal indexed documents**, with optional deterministic filters.
+> Perform **semantic search over indexed ChatGPT documents**, with optional deterministic filters.
 
 No side effects. Idempotent.
 
@@ -190,10 +204,13 @@ No side effects. Idempotent.
 
 1. Apply metadata filters
 2. Perform vector similarity search
-3. Optional lexical boost
-4. Return top-K
+3. Return top-K
 
 **No conversational state.**
+
+Implementation note:
+- current server performs metadata filter + vector search
+- lexical boost is not implemented
 
 ---
 
@@ -256,8 +273,8 @@ This tool can be:
 
 ### ChatGPT Adapter
 
-* [ ] Clean one-message → one-document mapping
-* [ ] Stable IDs
+* [x] Clean one-message → one-document mapping
+* [x] Stable IDs
 * [ ] No semantic loss
 * [ ] Zero embedding logic
 

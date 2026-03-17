@@ -12,10 +12,12 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Usage: go run main.go <path-to-export>")
+		log.Fatal("diagnostic helper; use only for export inspection\nUsage: go run ./cmd/analyze <path-to-export>")
 	}
 
 	path := os.Args[1]
+
+	fmt.Println("NOTE: cmd/analyze is diagnostic-only. It is not part of the production ingest/search path.")
 
 	// Load export
 	exp, err := chatgpt.LoadExport(path)
