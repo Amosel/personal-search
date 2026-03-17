@@ -9,6 +9,7 @@ OLLAMA_URL ?= http://localhost:11434
 OLLAMA_MODEL ?= nomic-embed-text:latest
 CHATGPT_DIM ?= 0
 CHATGPT_BATCH ?= 8
+CHATGPT_FORMAT ?= json
 
 .PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
 
@@ -80,6 +81,7 @@ chatgpt-search:
 	@test -n "$(QUERY)" || (echo "QUERY='...'" && exit 1)
 	go run ./cmd/search_chatgpt \
 		--server $(CHATGPT_SERVER_URL) \
+		--format $(CHATGPT_FORMAT) \
 		--query "$(QUERY)"
 
 chatgpt-mcp:

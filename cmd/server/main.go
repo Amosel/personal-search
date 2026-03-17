@@ -22,9 +22,9 @@ func main() {
 		collection  = flag.String("collection", "personal_docs", "Qdrant collection name")
 		embedder    = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
 		openaiKey   = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
-		modelName   = flag.String("model", "text-embedding-3-large", "OpenAI embedding model")
-		ollamaURL   = flag.String("ollama_url", "http://localhost:11434", "Ollama base URL")
-		ollamaModel = flag.String("ollama_model", "nomic-embed-text:latest", "Ollama embedding model")
+		modelName   = flag.String("model", embed.DefaultOpenAIModel, "OpenAI embedding model")
+		ollamaURL   = flag.String("ollama_url", embed.DefaultOllamaURL, "Ollama base URL")
+		ollamaModel = flag.String("ollama_model", embed.DefaultOllamaModel, "Ollama embedding model")
 		dim         = flag.Int("dim", 0, "Embedding dimension (0 = infer for Ollama)")
 	)
 	flag.Parse()
@@ -32,7 +32,7 @@ func main() {
 	if *collection == "" {
 		fatal("--collection is required")
 	}
-	emb, err := buildEmbedder(*embedder, *openaiKey, *modelName, *ollamaURL, *ollamaModel, *dim)
+	emb, err := embed.New(*embedder, *openaiKey, *modelName, *ollamaURL, *ollamaModel, *dim)
 	if err != nil {
 		fatal(err.Error())
 	}
@@ -121,38 +121,6 @@ func main() {
 
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		fatal(err.Error())
-	}
-}
-
-func buildEmbedder(kind, key, modelName, ollamaURL, ollamaModel string, dim int) (embed.Embedder, error) {
-	switch kind {
-	case "openai":
-		if key == "" {
-			return nil, fmt.Errorf("missing OpenAI key (set OPENAI_API_KEY or --openai_key)")
-		}
-		if dim <= 0 {
-			return nil, fmt.Errorf("--dim must be > 0")
-		}
-		return &embed.OpenAIEmbedder{APIKey: key, Model: modelName, DimVal: dim}, nil
-	case "fake":
-		if dim <= 0 {
-			return nil, fmt.Errorf("--dim must be > 0")
-		}
-		return &embed.FakeEmbedder{DimVal: dim}, nil
-	case "ollama":
-		if dim == 0 {
-			var err error
-			dim, err = embed.DetectOllamaDimension(context.Background(), ollamaURL, ollamaModel, nil)
-			if err != nil {
-				return nil, fmt.Errorf("infer Ollama dimension: %w", err)
-			}
-		}
-		if dim < 0 {
-			return nil, fmt.Errorf("--dim must be >= 0")
-		}
-		return &embed.OllamaEmbedder{BaseURL: ollamaURL, Model: ollamaModel, DimVal: dim}, nil
-	default:
-		return nil, fmt.Errorf("unsupported --embedder value: %s", kind)
 	}
 }
 

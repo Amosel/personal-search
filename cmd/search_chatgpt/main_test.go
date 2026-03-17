@@ -40,7 +40,7 @@ func TestRun_EmitsYAML(t *testing.T) {
 			Results: []model.SearchResult{{
 				ID:        "1",
 				Source:    "chatgpt",
-				Text:      "custody strategy",
+				Text:      "line one\nline two",
 				Timestamp: "2025-01-01T00:00:00Z",
 				Metadata: map[string]any{
 					"author": "assistant",
@@ -54,6 +54,12 @@ func TestRun_EmitsYAML(t *testing.T) {
 	out := stdout.String()
 	if !strings.Contains(out, "results:") || !strings.Contains(out, `source: "chatgpt"`) {
 		t.Fatalf("expected YAML output, got %s", out)
+	}
+	if !strings.Contains(out, "text: |-\n") {
+		t.Fatalf("expected YAML block scalar, got %s", out)
+	}
+	if !strings.Contains(out, "\n      line one\n") {
+		t.Fatalf("expected properly indented multiline text, got %s", out)
 	}
 }
 

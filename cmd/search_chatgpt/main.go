@@ -94,9 +94,7 @@ func writeYAMLValue(b *strings.Builder, indent int, v any) {
 			b.WriteString(k)
 			b.WriteString(":")
 			if isScalar(x[k]) {
-				b.WriteString(" ")
-				b.WriteString(formatYAMLScalar(x[k]))
-				b.WriteString("\n")
+				writeYAMLScalar(b, indent, x[k], true)
 				continue
 			}
 			b.WriteString("\n")
@@ -121,9 +119,7 @@ func writeYAMLListItem(b *strings.Builder, indent int, item any) {
 	writeIndent(b, indent)
 	b.WriteString("-")
 	if isScalar(item) {
-		b.WriteString(" ")
-		b.WriteString(formatYAMLScalar(item))
-		b.WriteString("\n")
+		writeYAMLScalar(b, indent, item, true)
 		return
 	}
 	b.WriteString("\n")
@@ -153,17 +149,6 @@ func formatYAMLScalar(v any) string {
 		if x == "" {
 			return `""`
 		}
-		if strings.Contains(x, "\n") {
-			lines := strings.Split(x, "\n")
-			var b strings.Builder
-			b.WriteString("|-\n")
-			for _, line := range lines {
-				b.WriteString("  ")
-				b.WriteString(line)
-				b.WriteString("\n")
-			}
-			return b.String()
-		}
 		return strconv.Quote(x)
 	case bool:
 		if x {
@@ -189,4 +174,25 @@ func formatYAMLScalar(v any) string {
 	default:
 		return strconv.Quote(fmt.Sprintf("%v", x))
 	}
+}
+
+func writeYAMLScalar(b *strings.Builder, indent int, v any, inline bool) {
+	if s, ok := v.(string); ok && strings.Contains(s, "\n") {
+		if inline {
+			b.WriteString(" |-\n")
+		} else {
+			b.WriteString("|-\n")
+		}
+		for _, line := range strings.Split(s, "\n") {
+			writeIndent(b, indent+2)
+			b.WriteString(line)
+			b.WriteString("\n")
+		}
+		return
+	}
+	if inline {
+		b.WriteString(" ")
+	}
+	b.WriteString(formatYAMLScalar(v))
+	b.WriteString("\n")
 }

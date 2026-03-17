@@ -17,6 +17,7 @@ Usage:
 Notes:
   - default path uses local Ollama + local Qdrant
   - for ingest, path can also come from CHATGPT_EXPORT_PATH
+  - set CHATGPT_FORMAT=yaml for YAML search output
 EOF
 }
 
@@ -53,10 +54,7 @@ case "${cmd}" in
       echo "missing query text" >&2
       exit 1
     fi
-    if [[ -n "${CHATGPT_FORMAT:-}" ]]; then
-      exec go run ./cmd/search_chatgpt --server "${CHATGPT_SERVER_URL:-http://127.0.0.1:18080}" --format "${CHATGPT_FORMAT}" --query "${query}"
-    fi
-    exec make chatgpt-search "QUERY=${query}"
+    exec make chatgpt-search "QUERY=${query}" "CHATGPT_FORMAT=${CHATGPT_FORMAT:-json}"
     ;;
   *)
     echo "unknown subcommand: ${cmd}" >&2

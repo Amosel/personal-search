@@ -47,6 +47,7 @@ Search from terminal:
 ```bash
 make chatgpt-search QUERY="custody strategy"
 ./chatgpt-conversation-search search "custody strategy"
+CHATGPT_FORMAT=yaml ./chatgpt-conversation-search search "custody strategy"
 ```
 
 Run MCP server:
