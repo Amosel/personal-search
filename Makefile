@@ -1,8 +1,11 @@
 SHELL := /bin/bash
 
 QDRANT_URL ?= http://localhost:6333
+CHATGPT_COLLECTION ?= chatgpt_messages
+CHATGPT_SERVER_ADDR ?= 127.0.0.1:18080
+CHATGPT_SERVER_URL ?= http://$(CHATGPT_SERVER_ADDR)
 
-.PHONY: qdrant-up qdrant-down qdrant-status default-status smoke acceptance integration semantic-smoke
+.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
 
 qdrant-up:
 	@set -euo pipefail; \
@@ -25,6 +28,39 @@ default-status: qdrant-up
 		exit 1; \
 	fi; \
 	curl -sf -X POST $(QDRANT_URL)/collections/personal_docs/points/count \
+		-H "Content-Type: application/json" \
+		-d '{"exact":true}' | jq '.result.count'
+
+chatgpt-ingest: qdrant-up
+	@test -n "$(EXPORT)" || (echo "EXPORT=/path/to/chatgpt-export.json-or-zip required" && exit 1)
+	go run ./cmd/ingest_chatgpt \
+		--export "$(EXPORT)" \
+		--qdrant $(QDRANT_URL) \
+		--collection $(CHATGPT_COLLECTION)
+
+chatgpt-server: qdrant-up
+	go run ./cmd/server \
+		--addr $(CHATGPT_SERVER_ADDR) \
+		--qdrant $(QDRANT_URL) \
+		--collection $(CHATGPT_COLLECTION)
+
+chatgpt-search:
+	@test -n "$(QUERY)" || (echo "QUERY='...'" && exit 1)
+	go run ./cmd/search_chatgpt \
+		--server $(CHATGPT_SERVER_URL) \
+		--query "$(QUERY)"
+
+chatgpt-mcp:
+	go run ./cmd/mcp_chatgpt_search \
+		--server $(CHATGPT_SERVER_URL)
+
+chatgpt-status: qdrant-up
+	@set -euo pipefail; \
+	if ! curl -sf $(QDRANT_URL)/collections/$(CHATGPT_COLLECTION) >/dev/null 2>&1; then \
+		echo "collection $(CHATGPT_COLLECTION) missing"; \
+		exit 1; \
+	fi; \
+	curl -sf -X POST $(QDRANT_URL)/collections/$(CHATGPT_COLLECTION)/points/count \
 		-H "Content-Type: application/json" \
 		-d '{"exact":true}' | jq '.result.count'
 
