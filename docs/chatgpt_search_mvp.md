@@ -32,30 +32,35 @@ Ingest:
 
 ```bash
 make chatgpt-ingest EXPORT=/absolute/path/to/chatgpt-export.zip
+./chatgpt-conversation-search ingest /absolute/path/to/conversations.json
 ```
 
 Run server:
 
 ```bash
 make chatgpt-server
+./chatgpt-conversation-search server
 ```
 
 Search from terminal:
 
 ```bash
 make chatgpt-search QUERY="custody strategy"
+./chatgpt-conversation-search search "custody strategy"
 ```
 
 Run MCP server:
 
 ```bash
 make chatgpt-mcp
+./chatgpt-conversation-search mcp
 ```
 
 Check collection status:
 
 ```bash
 make chatgpt-status
+./chatgpt-conversation-search status
 ```
 
 ## Supported Search Parameters

@@ -13,6 +13,7 @@ Use this skill when the user wants retrieval from their prior ChatGPT conversati
 - ChatGPT export has been ingested into the configured local collection
 - local MCP server `chatgpt-search-mcp` is active
 - default local path uses Ollama embeddings; no OpenAI key needed
+- helper wrapper available in repo root: `./chatgpt-conversation-search`
 
 ## Tool
 

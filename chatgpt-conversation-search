@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${repo_root}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  chatgpt-conversation-search doctor
+  chatgpt-conversation-search ingest /absolute/path/to/conversations.json
+  chatgpt-conversation-search status
+  chatgpt-conversation-search server
+  chatgpt-conversation-search search "query text"
+  chatgpt-conversation-search mcp
+
+Notes:
+  - default path uses local Ollama + local Qdrant
+  - for ingest, path can also come from CHATGPT_EXPORT_PATH
+EOF
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "${cmd}" in
+  help|-h|--help)
+    usage
+    ;;
+  doctor)
+    exec make chatgpt-doctor
+    ;;
+  status)
+    exec make chatgpt-status
+    ;;
+  server)
+    exec make chatgpt-server
+    ;;
+  mcp)
+    exec make chatgpt-mcp
+    ;;
+  ingest)
+    export_path="${1:-${CHATGPT_EXPORT_PATH:-}}"
+    if [[ -z "${export_path}" ]]; then
+      echo "missing export path; pass file path or set CHATGPT_EXPORT_PATH" >&2
+      exit 1
+    fi
+    exec make chatgpt-ingest "EXPORT=${export_path}"
+    ;;
+  search)
+    query="${*:-}"
+    if [[ -z "${query}" ]]; then
+      echo "missing query text" >&2
+      exit 1
+    fi
+    exec make chatgpt-search "QUERY=${query}"
+    ;;
+  *)
+    echo "unknown subcommand: ${cmd}" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
