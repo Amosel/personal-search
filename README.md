@@ -18,6 +18,7 @@ make qdrant-up
 ./chatgpt-conversation-search ingest /absolute/path/to/conversations.json
 ./chatgpt-conversation-search server
 CHATGPT_FORMAT=yaml ./chatgpt-conversation-search search "custody strategy"
+./chatgpt-conversation-search search --author assistant --limit 3 "custody strategy"
 ```
 
 Operator detail:

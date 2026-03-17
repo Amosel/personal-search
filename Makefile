@@ -10,6 +10,7 @@ OLLAMA_MODEL ?= nomic-embed-text:latest
 CHATGPT_DIM ?= 0
 CHATGPT_BATCH ?= 8
 CHATGPT_FORMAT ?= json
+CHATGPT_SEARCH_ARGS ?=
 
 .PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
 
@@ -39,10 +40,12 @@ default-status: qdrant-up
 
 chatgpt-doctor: qdrant-up
 	@set -euo pipefail; \
+	tmp_file="$$(mktemp)"; \
+	trap 'rm -f "$$tmp_file"' EXIT; \
 	echo "qdrant=$(QDRANT_URL) ok"; \
-	curl -sf $(OLLAMA_URL)/api/tags >/tmp/chatgpt-ollama-tags.json; \
+	curl -sf $(OLLAMA_URL)/api/tags >"$$tmp_file"; \
 	echo "ollama=$(OLLAMA_URL) ok"; \
-	if jq -e --arg model "$(OLLAMA_MODEL)" '.models[] | select(.name == $$model)' /tmp/chatgpt-ollama-tags.json >/dev/null; then \
+	if jq -e --arg model "$(OLLAMA_MODEL)" '.models[] | select(.name == $$model)' "$$tmp_file" >/dev/null; then \
 		echo "ollama_model=$(OLLAMA_MODEL) ok"; \
 	else \
 		echo "ollama_model=$(OLLAMA_MODEL) missing"; \
@@ -82,7 +85,8 @@ chatgpt-search:
 	go run ./cmd/search_chatgpt \
 		--server $(CHATGPT_SERVER_URL) \
 		--format $(CHATGPT_FORMAT) \
-		--query "$(QUERY)"
+		--query "$(QUERY)" \
+		$(CHATGPT_SEARCH_ARGS)
 
 chatgpt-mcp:
 	go run ./cmd/mcp_chatgpt_search \

@@ -11,7 +11,7 @@ Usage:
   chatgpt-conversation-search ingest /absolute/path/to/conversations.json
   chatgpt-conversation-search status
   chatgpt-conversation-search server
-  chatgpt-conversation-search search "query text"
+  chatgpt-conversation-search search [--author assistant] [--limit 3] "query text"
   chatgpt-conversation-search mcp
 
 Notes:
@@ -49,12 +49,71 @@ case "${cmd}" in
     exec make chatgpt-ingest "EXPORT=${export_path}"
     ;;
   search)
-    query="${*:-}"
+    query_parts=()
+    search_args=()
+    format="${CHATGPT_FORMAT:-json}"
+    server_url="${CHATGPT_SERVER_URL:-http://127.0.0.1:18080}"
+    expect_value=""
+    for arg in "$@"; do
+      if [[ -n "${expect_value}" ]]; then
+        if [[ "${expect_value}" == "query" ]]; then
+          query_parts+=("${arg}")
+        elif [[ "${expect_value}" == "format" ]]; then
+          format="${arg}"
+        elif [[ "${expect_value}" == "server" ]]; then
+          server_url="${arg}"
+        else
+          search_args+=("${arg}")
+        fi
+        expect_value=""
+        continue
+      fi
+      case "${arg}" in
+        --query)
+          expect_value="query"
+          ;;
+        --author|--thread_id|--from|--to|--limit)
+          search_args+=("${arg}")
+          expect_value="flag"
+          ;;
+        --format)
+          expect_value="format"
+          ;;
+        --server)
+          expect_value="server"
+          ;;
+        --help|-h)
+          usage
+          exit 0
+          ;;
+        --*)
+          echo "unsupported search flag: ${arg}" >&2
+          exit 1
+          ;;
+        *)
+          query_parts+=("${arg}")
+          ;;
+      esac
+    done
+    if [[ -n "${expect_value}" ]]; then
+      echo "missing value for final search flag" >&2
+      exit 1
+    fi
+    query="${query_parts[*]:-}"
     if [[ -z "${query}" ]]; then
       echo "missing query text" >&2
       exit 1
     fi
-    exec make chatgpt-search "QUERY=${query}" "CHATGPT_FORMAT=${CHATGPT_FORMAT:-json}"
+    extra_args=""
+    if [[ ${#search_args[@]} -gt 0 ]]; then
+      printf -v extra_args '%q ' "${search_args[@]}"
+      extra_args="${extra_args% }"
+    fi
+    exec make chatgpt-search \
+      "QUERY=${query}" \
+      "CHATGPT_FORMAT=${format}" \
+      "CHATGPT_SERVER_URL=${server_url}" \
+      "CHATGPT_SEARCH_ARGS=${extra_args}"
     ;;
   *)
     echo "unknown subcommand: ${cmd}" >&2
