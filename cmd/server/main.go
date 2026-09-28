@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	embedfs "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"personal-search/internal/embed"
@@ -15,9 +18,12 @@ import (
 	"personal-search/internal/qdrant"
 )
 
+//go:embed web
+var webFiles embedfs.FS
+
 func main() {
 	var (
-		addr        = flag.String("addr", ":8080", "HTTP listen address")
+		addr        = flag.String("addr", "127.0.0.1:8080", "HTTP listen address")
 		qdrantURL   = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
 		collection  = flag.String("collection", "personal_docs", "Qdrant collection name")
 		embedder    = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
@@ -43,6 +49,33 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || (r.URL.Path != "/" && r.URL.Path != "/index.html") {
+			http.NotFound(w, r)
+			return
+		}
+		page, err := webFiles.ReadFile("web/index.html")
+		if err != nil {
+			http.Error(w, "UI unavailable", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(page)
+	})
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		count, err := qc.Count(r.Context(), *collection)
+		if err != nil {
+			http.Error(w, "index unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "collection": *collection, "points": count})
+	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -94,33 +127,79 @@ func main() {
 
 		resp := model.SearchResponse{Results: make([]model.SearchResult, 0, len(out.Result))}
 		for _, hit := range out.Result {
-			payload := hit.Payload
-			id := payloadString(payload, "doc_id")
-			if id == "" {
-				id = pointIDToString(hit.ID)
-			}
-
-			ts := ""
-			if ms, ok := payloadFloat(payload, "timestamp_unix_ms"); ok {
-				ts = time.UnixMilli(int64(ms)).UTC().Format(time.RFC3339)
-			}
-
-			resp.Results = append(resp.Results, model.SearchResult{
-				ID:        id,
-				Score:     hit.Score,
-				Text:      payloadString(payload, "text"),
-				Timestamp: ts,
-				Source:    payloadString(payload, "source"),
-				Metadata:  payload,
-			})
+			resp.Results = append(resp.Results, toSearchResult(hit))
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
+	mux.HandleFunc("/thread", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		threadID := strings.TrimSpace(r.URL.Query().Get("thread_id"))
+		if threadID == "" {
+			http.Error(w, "thread_id is required", http.StatusBadRequest)
+			return
+		}
+
+		const pageSize, maxMessages = 500, 5000
+		filter := &qdrant.Filter{Must: []any{qdrant.FieldCondition{
+			Key: "thread_id", Match: &qdrant.MatchValue{Value: threadID},
+		}}}
+		messages := make([]model.SearchResult, 0, pageSize)
+		var offset any
+		truncated := false
+		for len(messages) < maxMessages {
+			limit := pageSize
+			if remaining := maxMessages - len(messages); remaining < limit {
+				limit = remaining
+			}
+			page, err := qc.Scroll(r.Context(), *collection, qdrant.ScrollRequest{
+				Filter: filter, Limit: limit, Offset: offset, WithPayload: true,
+			})
+			if err != nil {
+				http.Error(w, "thread lookup error", http.StatusInternalServerError)
+				return
+			}
+			for _, hit := range page.Result.Points {
+				messages = append(messages, toSearchResult(hit))
+			}
+			offset = page.Result.NextPageOffset
+			if offset == nil || len(page.Result.Points) == 0 {
+				break
+			}
+			if len(messages) >= maxMessages {
+				truncated = true
+			}
+		}
+		sort.SliceStable(messages, func(i, j int) bool {
+			return messages[i].Timestamp < messages[j].Timestamp
+		})
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"results": messages, "truncated": truncated})
+	})
+
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		fatal(err.Error())
+	}
+}
+
+func toSearchResult(hit qdrant.ScoredPoint) model.SearchResult {
+	payload := hit.Payload
+	id := payloadString(payload, "doc_id")
+	if id == "" {
+		id = pointIDToString(hit.ID)
+	}
+	ts := ""
+	if ms, ok := payloadFloat(payload, "timestamp_unix_ms"); ok {
+		ts = time.UnixMilli(int64(ms)).UTC().Format(time.RFC3339)
+	}
+	return model.SearchResult{
+		ID: id, Score: hit.Score, Text: payloadString(payload, "text"),
+		Timestamp: ts, Source: payloadString(payload, "source"), Metadata: payload,
 	}
 }
 

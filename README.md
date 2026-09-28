@@ -75,7 +75,7 @@
 ## `go run ./cmd/server`
 
 - Flags:
-  - `--addr` default `:8080`
+  - `--addr` default `127.0.0.1:8080` (loopback only)
   - `--qdrant`
   - `--collection`
   - `--embedder`
@@ -114,6 +114,18 @@
 - Behavior: diagnostic helper; prints export analysis, skip counts, role/timestamp distribution, sample document
 
 # 3. API Endpoints (actual)
+
+## `GET /`
+
+- Serves the embedded, local search UI.
+
+## `GET /status`
+
+- Returns the configured collection name and exact Qdrant point count.
+
+## `GET /thread?thread_id=...`
+
+- Returns messages in one conversation ordered by timestamp. Response includes `truncated: true` if the conversation exceeds 5,000 messages.
 
 ## `GET /health`
 
@@ -433,8 +445,11 @@
 ## How to run search
 
 - Start server: `make chatgpt-server`
+- Open the local search UI: <http://127.0.0.1:18080/>
 - Search: `make chatgpt-search QUERY="..." [CHATGPT_FORMAT=yaml]`
 - Or wrapper `./chatgpt-conversation-search search ...`
+
+The UI searches through the same semantic `/search` endpoint, filters by date, speaker, or conversation ID, and can expand a match into its full conversation. Qdrant's dashboard remains available separately at <http://localhost:6333/dashboard> for database administration.
 
 ## MCP runtime
 

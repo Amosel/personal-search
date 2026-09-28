@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" href="data:," />
+    <title>Personal Search</title>
+    <style>
+      :root {
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #20231f;
+        background: #f5f4ef;
+        font-synthesis: none;
+        --muted: #686e65;
+        --line: #dedfd7;
+        --green: #315c47;
+        --paper: #fffefa;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; }
+      header { border-bottom: 1px solid var(--line); background: #fbfaf6; }
+      .topbar, main { width: min(960px, calc(100% - 36px)); margin: auto; }
+      .topbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; }
+      .brand { display: flex; align-items: center; gap: 11px; font-weight: 650; letter-spacing: -.02em; }
+      .mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: white; background: var(--green); font-size: 18px; }
+      .index-state { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: #a5aa9f; }
+      .dot.ready { background: #43855d; }
+      main { padding: 54px 0 80px; }
+      .intro { margin-bottom: 25px; }
+      h1 { margin: 0 0 9px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 6vw, 48px); font-weight: 500; letter-spacing: -.04em; }
+      .intro p { margin: 0; color: var(--muted); font-size: 15px; }
+      .search-box { padding: 12px; border: 1px solid #d5d8ce; border-radius: 14px; background: var(--paper); box-shadow: 0 8px 24px #28362a0c; }
+      .query-row { display: flex; gap: 10px; }
+      textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 160px; resize: vertical; border: 0; outline: 0; padding: 13px 12px; background: transparent; color: inherit; font: inherit; font-size: 16px; }
+      textarea::placeholder { color: #92968e; }
+      button, select, input { font: inherit; }
+      button { cursor: pointer; }
+      .search-button { align-self: stretch; padding: 0 22px; border: 0; border-radius: 10px; background: var(--green); color: white; font-weight: 600; }
+      .search-button:hover { background: #254b38; }
+      .search-button:disabled { cursor: wait; opacity: .65; }
+      .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 10px 8px 2px; border-top: 1px solid #eeeee8; }
+      .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
+      .field input, .field select { height: 33px; min-width: 125px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: #33382f; font-size: 13px; }
+      .field.conversation { flex: 1 1 190px; }
+      .field.conversation input { min-width: 190px; }
+      .field.limit select { min-width: 72px; }
+      .hint { margin-left: auto; padding: 0 2px 9px; color: #898e85; font-size: 11px; }
+      .notice { min-height: 44px; padding: 16px 2px 10px; color: var(--muted); font-size: 13px; }
+      .notice.error { color: #a23e31; }
+      .result-head { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 0 12px; }
+      .result-head h2 { margin: 0; font-size: 14px; font-weight: 650; }
+      .result-head span { color: var(--muted); font-size: 12px; }
+      .results { display: grid; gap: 11px; }
+      .result { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+      .result-main { padding: 17px 18px 14px; }
+      .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 11px; color: var(--muted); font-size: 11px; }
+      .author { padding: 3px 7px; border-radius: 99px; background: #e9eee8; color: #375b46; text-transform: capitalize; font-weight: 600; }
+      .author.assistant { background: #efeee8; color: #686452; }
+      .title { color: #444b41; font-weight: 600; }
+      .score { margin-left: auto; font-variant-numeric: tabular-nums; }
+      .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.62; }
+      .full-message { margin-top: 11px; color: var(--green); font-size: 12px; cursor: pointer; }
+      .full-message .message { margin-top: 8px; color: #20231f; cursor: text; }
+      .result-actions { display: flex; align-items: center; gap: 16px; padding: 0 18px 14px; }
+      .text-button { border: 0; padding: 0; background: none; color: var(--green); font-size: 12px; font-weight: 600; }
+      .text-button:hover { text-decoration: underline; }
+      .thread { display: grid; gap: 0; border-top: 1px solid var(--line); background: #faf9f4; }
+      .thread-entry { padding: 13px 18px; border-bottom: 1px solid #e9e9e1; }
+      .thread-entry:last-child { border-bottom: 0; }
+      .thread-entry .message { font-size: 13px; }
+      .empty { padding: 32px; border: 1px dashed #d4d7cd; border-radius: 12px; color: var(--muted); text-align: center; font-size: 13px; }
+      @media (max-width: 600px) {
+        main { padding-top: 36px; }
+        .query-row { display: grid; }
+        .search-button { min-height: 44px; }
+        .filters { gap: 9px; }
+        .field { flex: 1 1 calc(50% - 10px); }
+        .field input, .field select { width: 100%; }
+        .hint { width: 100%; margin: 0; padding: 2px 0 4px; }
+        .result-main { padding: 15px 14px 12px; }
+        .result-actions { padding: 0 14px 13px; }
+        .thread-entry { padding: 12px 14px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="topbar">
+        <div class="brand"><span class="mark" aria-hidden="true">⌕</span> Personal Search</div>
+        <div class="index-state" aria-live="polite"><span class="dot" id="health-dot"></span><span id="index-state">Connecting to local index…</span></div>
+      </div>
+    </header>
+    <main>
+      <section class="intro">
+        <h1>Find what you remember.</h1>
+        <p>Search your ChatGPT conversations by meaning, then narrow by date or speaker.</p>
+      </section>
+      <form class="search-box" id="search-form">
+        <div class="query-row">
+          <textarea id="query" aria-label="Search conversations" placeholder="What did I decide about…" required></textarea>
+          <button class="search-button" id="search-button" type="submit">Search</button>
+        </div>
+        <div class="filters">
+          <label class="field">From<input type="date" id="from" /></label>
+          <label class="field">To<input type="date" id="to" /></label>
+          <label class="field">Speaker<select id="author"><option value="">Anyone</option><option value="user">Me</option><option value="assistant">Assistant</option></select></label>
+          <label class="field conversation">Conversation ID<input type="text" id="thread-id" placeholder="Optional exact match" /></label>
+          <label class="field limit">Results<select id="limit"><option>10</option><option selected>20</option><option>40</option></select></label>
+          <span class="hint">Press Enter to search · Shift+Enter for a new line</span>
+        </div>
+      </form>
+      <div class="notice" id="notice" aria-live="polite">Enter a question or topic to search your archive.</div>
+      <section id="result-section" hidden>
+        <div class="result-head"><h2>Search results</h2><span id="result-count"></span></div>
+        <div class="results" id="results"></div>
+      </section>
+    </main>
+    <script>
+      const form = document.querySelector('#search-form');
+      const queryInput = document.querySelector('#query');
+      const button = document.querySelector('#search-button');
+      const notice = document.querySelector('#notice');
+      const resultsRoot = document.querySelector('#results');
+      const resultSection = document.querySelector('#result-section');
+
+      function node(tag, className, text) {
+        const el = document.createElement(tag);
+        if (className) el.className = className;
+        if (text !== undefined) el.textContent = text;
+        return el;
+      }
+      function prettyDate(value) {
+        if (!value) return 'Date unavailable';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+      }
+      function appendMessage(parent, text) {
+        const value = text || '[No text]';
+        const maxExcerpt = 1400;
+        if (value.length <= maxExcerpt) {
+          parent.append(node('p', 'message', value));
+          return;
+        }
+        parent.append(node('p', 'message', `${value.slice(0, maxExcerpt).trimEnd()}…`));
+        const details = node('details', 'full-message');
+        details.append(node('summary', '', 'Read full message'));
+        details.append(node('p', 'message', value));
+        parent.append(details);
+      }
+      async function updateStatus() {
+        const label = document.querySelector('#index-state');
+        const dot = document.querySelector('#health-dot');
+        try {
+          const response = await fetch('/status');
+          if (!response.ok) throw new Error('offline');
+          const info = await response.json();
+          label.textContent = `${info.points.toLocaleString()} messages indexed`;
+          dot.classList.add('ready');
+        } catch (_) {
+          label.textContent = 'Local index unavailable';
+          dot.classList.remove('ready');
+        }
+      }
+      function renderThread(container, messages, truncated) {
+        container.replaceChildren();
+        if (truncated) container.append(node('p', 'notice', 'Showing first 5,000 messages in this conversation.'));
+        for (const message of messages) {
+          const item = node('article', 'thread-entry');
+          const meta = node('div', 'meta');
+          meta.append(node('span', `author ${message.metadata?.author || ''}`, message.metadata?.author || 'unknown'));
+          meta.append(node('time', '', prettyDate(message.timestamp)));
+          item.append(meta);
+          appendMessage(item, message.text);
+          container.append(item);
+        }
+      }
+      function renderResult(item) {
+        const card = node('article', 'result');
+        const main = node('div', 'result-main');
+        const meta = node('div', 'meta');
+        const author = item.metadata?.author || 'unknown';
+        meta.append(node('span', `author ${author}`, author));
+        meta.append(node('time', '', prettyDate(item.timestamp)));
+        if (item.metadata?.title) meta.append(node('span', 'title', item.metadata.title));
+        meta.append(node('span', 'score', `Match ${(item.score * 100).toFixed(1)}%`));
+        main.append(meta);
+        appendMessage(main, item.text);
+        const actions = node('div', 'result-actions');
+        const threadID = item.metadata?.thread_id;
+        let threadPanel;
+        if (threadID) {
+          const toggle = node('button', 'text-button', 'Open conversation');
+          toggle.type = 'button';
+          toggle.addEventListener('click', async () => {
+            if (threadPanel) {
+              threadPanel.remove();
+              threadPanel = undefined;
+              toggle.textContent = 'Open conversation';
+              return;
+            }
+            toggle.disabled = true;
+            toggle.textContent = 'Loading…';
+            try {
+              const response = await fetch(`/thread?thread_id=${encodeURIComponent(threadID)}`);
+              if (!response.ok) throw new Error(await response.text());
+              const data = await response.json();
+              threadPanel = node('div', 'thread');
+              renderThread(threadPanel, data.results || [], data.truncated);
+              card.append(threadPanel);
+              toggle.textContent = 'Close conversation';
+            } catch (_) {
+              toggle.textContent = 'Could not load conversation';
+            } finally {
+              toggle.disabled = false;
+            }
+          });
+          actions.append(toggle);
+          const searchInThread = node('button', 'text-button', 'Search this conversation');
+          searchInThread.type = 'button';
+          searchInThread.addEventListener('click', () => {
+            document.querySelector('#thread-id').value = threadID;
+            form.requestSubmit();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          });
+          actions.append(searchInThread);
+        }
+        const copy = node('button', 'text-button', 'Copy message');
+        copy.type = 'button';
+        copy.addEventListener('click', async () => {
+          try { await navigator.clipboard.writeText(item.text || ''); copy.textContent = 'Copied'; }
+          catch (_) { copy.textContent = 'Copy unavailable'; }
+          setTimeout(() => { copy.textContent = 'Copy message'; }, 1600);
+        });
+        actions.append(copy);
+        card.append(main, actions);
+        return card;
+      }
+      queryInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          form.requestSubmit();
+        }
+      });
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const query = queryInput.value.trim();
+        if (!query) return;
+        button.disabled = true;
+        button.textContent = 'Searching…';
+        notice.className = 'notice';
+        notice.textContent = 'Searching your conversations…';
+        resultsRoot.replaceChildren();
+        resultSection.hidden = true;
+        const filters = { source: ['chatgpt'] };
+        const author = document.querySelector('#author').value;
+        if (author) filters.author = author;
+        const threadID = document.querySelector('#thread-id').value.trim();
+        if (threadID) filters.thread_id = threadID;
+        const from = document.querySelector('#from').value;
+        const to = document.querySelector('#to').value;
+        if (from || to) filters.date = { from, to };
+        try {
+          const response = await fetch('/search', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, filters, limit: Number(document.querySelector('#limit').value) }),
+          });
+          if (!response.ok) throw new Error((await response.text()).trim() || `Search failed (${response.status})`);
+          const data = await response.json();
+          const results = data.results || [];
+          document.querySelector('#result-count').textContent = `${results.length} ${results.length === 1 ? 'message' : 'messages'}`;
+          if (!results.length) {
+            notice.textContent = 'No matches found. Try a broader question or remove a filter.';
+            return;
+          }
+          notice.textContent = '';
+          results.forEach((item) => resultsRoot.append(renderResult(item)));
+          resultSection.hidden = false;
+        } catch (error) {
+          notice.className = 'notice error';
+          notice.textContent = `Search failed: ${error.message}. Check that the local search server and Ollama are running.`;
+        } finally {
+          button.disabled = false;
+          button.textContent = 'Search';
+        }
+      });
+      updateStatus();
+    </script>
+  </body>
+</html>

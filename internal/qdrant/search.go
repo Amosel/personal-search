@@ -38,6 +38,21 @@ type SearchResponse struct {
 	Result []ScoredPoint `json:"result"`
 }
 
+type ScrollRequest struct {
+	Filter      *Filter `json:"filter,omitempty"`
+	Limit       int     `json:"limit"`
+	Offset      any     `json:"offset,omitempty"`
+	WithPayload bool    `json:"with_payload"`
+	WithVector  bool    `json:"with_vector"`
+}
+
+type ScrollResponse struct {
+	Result struct {
+		Points         []ScoredPoint `json:"points"`
+		NextPageOffset any           `json:"next_page_offset"`
+	} `json:"result"`
+}
+
 type ScoredPoint struct {
 	ID      any            `json:"id"`
 	Score   float64        `json:"score"`
@@ -63,5 +78,20 @@ func (c *Client) Search(ctx context.Context, collection string, req SearchReques
 	sort.Slice(out.Result, func(i, j int) bool {
 		return out.Result[i].Score > out.Result[j].Score
 	})
+	return &out, nil
+}
+
+func (c *Client) Scroll(ctx context.Context, collection string, req ScrollRequest) (*ScrollResponse, error) {
+	if collection == "" {
+		return nil, fmt.Errorf("collection is required")
+	}
+	if req.Limit <= 0 {
+		return nil, fmt.Errorf("scroll limit must be > 0")
+	}
+	var out ScrollResponse
+	path := "/collections/" + collection + "/points/scroll"
+	if err := c.do(ctx, http.MethodPost, path, req, &out); err != nil {
+		return nil, err
+	}
 	return &out, nil
 }
