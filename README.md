@@ -2,7 +2,7 @@
 
 ## Pipeline
 
-- ChatGPT export file path (`.json` or `.zip`) -> `chatgpt.LoadExport` -> `chatgpt.ToDocuments` -> embed text via selected embedder (`openai`, `fake`, `ollama`) -> create/ensure Qdrant collection -> upsert points with payload -> HTTP search server embeds query -> Qdrant vector search with optional metadata filter -> returns JSON search results
+- ChatGPT export file path (`.json` or `.zip`) -> `chatgpt.LoadExport` -> `chatgpt.ToDocumentsWithReport` classifies records and creates documents -> `ingest.Run` applies `max_docs`, embeds text via the selected embedder (`openai`, `fake`, `ollama`), ensures the Qdrant collection, and upserts points -> HTTP search server embeds the query -> Qdrant vector search with optional metadata filter -> JSON search results
 
 ## Entrypoints (CLI / server)
 
@@ -71,7 +71,7 @@
   - `--dim` default `0`
   - `--batch` default `64`
   - `--max_docs` default `0`
-- Behavior: loads export, classifies records into documents/skips/failures, writes a JSON report, optionally truncates selected docs by `max_docs`, ensures Qdrant collection with embedder dimension, embeds in batches, upserts points, prints progress
+- Behavior: loads export; records each source message as a document, skip, or failure in a JSON report; applies `max_docs` to ingestion after classifying the full export; ensures the Qdrant collection, embeds and upserts in batches; prints classification totals, completion count, and report path. Failures include a stage and error in the report when it can be written.
 
 ## `go run ./cmd/server`
 
