@@ -6,6 +6,9 @@
 
 ## Entrypoints (CLI / server)
 
+See [Operator entry points](docs/operator-entrypoints.md) for the supported
+operator actions, caller roles, diagnostic paths, and configuration precedence.
+
 - Wrapper CLI: [chatgpt-conversation-search](/Users/amoselmaliah/dev/projects/personal-search/chatgpt-conversation-search)
 - Ingest CLI: [cmd/ingest_chatgpt/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/ingest_chatgpt/main.go)
 - Search server: [cmd/server/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/server/main.go)
