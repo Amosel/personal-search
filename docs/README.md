@@ -22,3 +22,5 @@ Current authority:
 - operator workflow: `README.md` + `docs/chatgpt_search_mvp.md`
 - source parsing behavior: `docs/chatgpt_export_source.md`
 - live implementation: `cmd/`, `internal/`, tests
+- operator entrypoint inventory: `docs/operator-entrypoints.md`
+- compatibility and retirement policy: `docs/control_surface_compatibility.md`
