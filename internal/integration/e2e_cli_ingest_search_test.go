@@ -38,6 +38,7 @@ func TestE2E_CLIIngestThenSearch(t *testing.T) {
 		"--embedder", "fake",
 		"--dim", "16",
 		"--batch", "2",
+		"--report-out", filepath.Join(t.TempDir(), "ingest_report.json"),
 	)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()

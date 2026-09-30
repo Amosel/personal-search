@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+invocation_dir="$PWD"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${repo_root}"
 
@@ -46,7 +47,7 @@ case "${cmd}" in
       echo "missing export path; pass file path or set CHATGPT_EXPORT_PATH" >&2
       exit 1
     fi
-    exec make chatgpt-ingest "EXPORT=${export_path}"
+    exec make chatgpt-ingest "EXPORT=${export_path}" "REPORT_OUT=${invocation_dir}/ingest_report.json"
     ;;
   search)
     query_parts=()

@@ -11,6 +11,7 @@ CHATGPT_DIM ?= 0
 CHATGPT_BATCH ?= 8
 CHATGPT_FORMAT ?= json
 CHATGPT_SEARCH_ARGS ?=
+REPORT_OUT ?= ingest_report.json
 
 .PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
 
@@ -68,7 +69,8 @@ chatgpt-ingest: qdrant-up
 		--ollama_url $(OLLAMA_URL) \
 		--ollama_model $(OLLAMA_MODEL) \
 		--dim $(CHATGPT_DIM) \
-		--batch $(CHATGPT_BATCH)
+		--batch $(CHATGPT_BATCH) \
+		--report-out "$(REPORT_OUT)"
 
 chatgpt-server: qdrant-up
 	go run ./cmd/server \

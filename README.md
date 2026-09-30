@@ -60,6 +60,7 @@
 
 - Flags:
   - `--export`
+  - `--report-out` default `./ingest_report.json`; use this to choose a writable report destination
   - `--qdrant` default `http://localhost:6333`
   - `--collection` default `personal_docs`
   - `--embedder` default `openai`
@@ -70,7 +71,7 @@
   - `--dim` default `0`
   - `--batch` default `64`
   - `--max_docs` default `0`
-- Behavior: loads export, converts to documents, optionally truncates docs by `max_docs`, ensures Qdrant collection with embedder dimension, embeds in batches, upserts all points, prints progress
+- Behavior: loads export, classifies records into documents/skips/failures, writes a JSON report, optionally truncates selected docs by `max_docs`, ensures Qdrant collection with embedder dimension, embeds in batches, upserts points, prints progress
 
 ## `go run ./cmd/server`
 

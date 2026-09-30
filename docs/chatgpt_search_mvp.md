@@ -33,7 +33,10 @@ Ingest:
 ```bash
 make chatgpt-ingest EXPORT=/absolute/path/to/chatgpt-export.zip
 ./chatgpt-conversation-search ingest /absolute/path/to/conversations.json
+go run ./cmd/ingest_chatgpt --export /absolute/path/to/conversations.json --report-out /absolute/path/to/ingest-report.json
 ```
+
+The ingest CLI and Make target write `./ingest_report.json` relative to their working directory by default. The wrapper writes it in the directory where you invoked the wrapper. Set `--report-out` or `REPORT_OUT` to choose another writable destination.
 
 Run server:
 

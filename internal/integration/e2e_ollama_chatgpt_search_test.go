@@ -53,6 +53,7 @@ func TestE2E_OllamaIngestCLIThenSearchAndMCP(t *testing.T) {
 		"--ollama_model", ollamaModel,
 		"--dim", "0",
 		"--batch", "2",
+		"--report-out", filepath.Join(t.TempDir(), "ingest_report.json"),
 	)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()

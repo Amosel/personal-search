@@ -41,6 +41,7 @@ func TestE2E_IngestThenHTTPServerSearch(t *testing.T) {
 		"--embedder", "fake",
 		"--dim", "16",
 		"--batch", "2",
+		"--report-out", filepath.Join(t.TempDir(), "ingest_report.json"),
 	)
 	ingest.Dir = root
 	ingestOut, err := ingest.CombinedOutput()

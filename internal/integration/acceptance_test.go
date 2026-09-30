@@ -33,7 +33,9 @@ func TestAcceptance_E2E(t *testing.T) {
 	collection := fmt.Sprintf("itest_acceptance_%d", time.Now().UnixNano())
 	t.Cleanup(func() { _ = qc.DeleteCollection(context.Background(), collection) })
 
-	runIngestCLI(t, root, qdrantURL, collection, exportPath)
+	reportPath := filepath.Join(t.TempDir(), "ingest_report.json")
+	runIngestCLIWithReport(t, root, qdrantURL, collection, exportPath, reportPath)
+	assertCompletedIngestReport(t, reportPath)
 
 	initialCount, err := qc.Count(ctx, collection)
 	if err != nil {
@@ -43,7 +45,7 @@ func TestAcceptance_E2E(t *testing.T) {
 		t.Fatal("expected points after ingest")
 	}
 
-	runIngestCLI(t, root, qdrantURL, collection, exportPath)
+	runIngestCLIWithReport(t, root, qdrantURL, collection, exportPath, reportPath)
 	secondCount, err := qc.Count(ctx, collection)
 	if err != nil {
 		t.Fatalf("count after second ingest: %v", err)
@@ -261,6 +263,11 @@ func TestAcceptance_E2E(t *testing.T) {
 
 func runIngestCLI(t *testing.T, root, qdrantURL, collection, exportPath string) {
 	t.Helper()
+	runIngestCLIWithReport(t, root, qdrantURL, collection, exportPath, filepath.Join(t.TempDir(), "ingest_report.json"))
+}
+
+func runIngestCLIWithReport(t *testing.T, root, qdrantURL, collection, exportPath, reportPath string) {
+	t.Helper()
 	cmd := exec.Command(
 		"go", "run", "./cmd/ingest_chatgpt",
 		"--export", exportPath,
@@ -269,11 +276,38 @@ func runIngestCLI(t *testing.T, root, qdrantURL, collection, exportPath string) 
 		"--embedder", "fake",
 		"--dim", "16",
 		"--batch", "2",
+		"--report-out", reportPath,
 	)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("ingest failed: %v\noutput:\n%s", err, string(out))
+	}
+}
+
+func assertCompletedIngestReport(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read ingest report: %v", err)
+	}
+	var report struct {
+		Status  string `json:"status"`
+		Summary struct {
+			TotalRecords     int `json:"total_records"`
+			DocumentsCreated int `json:"documents_created"`
+			Skipped          int `json:"skipped"`
+			Failed           int `json:"failed"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("decode ingest report: %v", err)
+	}
+	if report.Status != "completed" {
+		t.Fatalf("expected completed report, got %q", report.Status)
+	}
+	if report.Summary.TotalRecords == 0 || report.Summary.DocumentsCreated == 0 || report.Summary.Failed != 0 {
+		t.Fatalf("unexpected report summary: %+v", report.Summary)
 	}
 }
 
