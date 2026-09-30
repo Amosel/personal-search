@@ -3,24 +3,30 @@ package ingest
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"path/filepath"
 
-	"personal-search/internal/chatgpt"
 	"personal-search/internal/embed"
-	"personal-search/internal/qdrant"
+	"personal-search/internal/ingestreport"
+	"personal-search/internal/model"
 )
 
-// Store is the small application boundary used by ingestion.  Keeping this
-// interface here lets tests exercise the real export conversion and embedding
-// path without requiring a running Qdrant service.
+// SourceAdapter converts one source input into validated canonical Documents.
+// Source-specific parsing and classification belong in the adapter; ingestion
+// only embeds and stores the resulting Documents.
+type SourceAdapter interface {
+	LoadDocuments(path string) ([]model.Document, ingestreport.Report, error)
+}
+
+// Store is the source-neutral storage boundary used by ingestion. Keeping this
+// interface here lets tests exercise source conversion and embedding without a
+// running storage service.
 type Store interface {
 	EnsureCollection(context.Context, string, int) error
-	Upsert(context.Context, string, []qdrant.Point) error
+	Upsert(context.Context, string, []model.Document, [][]float32) error
 }
 
 type Options struct {
-	ExportPath string
+	InputPath  string
 	ReportPath string
 	Collection string
 	BatchSize  int
@@ -29,15 +35,13 @@ type Options struct {
 
 type Result struct {
 	Documents int
-	Report    *chatgpt.IngestReport
+	Report    ingestreport.Report
 }
 
-// Run performs the production Personal Search ingestion computation: export
-// loading, canonical document selection, embedding, point construction, and
-// durable Qdrant upsert. The CLI is only an adapter around this function.
-func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Result, error) {
-	if opts.ExportPath == "" || opts.Collection == "" || opts.ReportPath == "" {
-		return Result{}, fmt.Errorf("export path, collection, and report path are required")
+// Run ingests canonical documents from the supplied source adapter.
+func Run(ctx context.Context, opts Options, source SourceAdapter, emb embed.Embedder, store Store) (Result, error) {
+	if opts.InputPath == "" || opts.Collection == "" || opts.ReportPath == "" {
+		return Result{}, fmt.Errorf("input path, collection, and report path are required")
 	}
 	if opts.BatchSize <= 0 {
 		return Result{}, fmt.Errorf("batch size must be > 0")
@@ -45,27 +49,26 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 	if opts.MaxDocs < 0 {
 		return Result{}, fmt.Errorf("max docs must be >= 0")
 	}
-	if emb == nil || store == nil {
-		return Result{}, fmt.Errorf("embedder and store are required")
+	if source == nil || emb == nil || store == nil {
+		return Result{}, fmt.Errorf("source adapter, embedder, and store are required")
 	}
-	report := chatgpt.NewIngestReport(opts.ExportPath)
+	var report ingestreport.Report
 	writeFailure := func(stage string, err error) (Result, error) {
-		report.MarkFailed(stage, err.Error())
-		if opts.ReportPath != "" {
+		if report != nil {
+			report.MarkFailed(stage, err.Error())
 			_ = report.Write(opts.ReportPath)
 		}
 		return Result{Report: report}, err
 	}
-	exp, err := chatgpt.LoadExport(opts.ExportPath)
+	docs, report, err := source.LoadDocuments(opts.InputPath)
 	if err != nil {
-		return writeFailure("load_export", fmt.Errorf("load export: %w", err))
+		return writeFailure("source", fmt.Errorf("load source documents: %w", err))
 	}
-	docs, err := chatgpt.ToDocumentsWithReport(exp, report)
-	if err != nil {
-		return writeFailure("classification", fmt.Errorf("convert export: %w", err))
+	if report == nil {
+		return Result{}, fmt.Errorf("source adapter returned a nil report")
 	}
 	if len(docs) == 0 {
-		return writeFailure("classification", fmt.Errorf("no documents produced from export"))
+		return writeFailure("source", fmt.Errorf("source produced no documents"))
 	}
 	if opts.MaxDocs > 0 && len(docs) > opts.MaxDocs {
 		docs = docs[:opts.MaxDocs]
@@ -87,15 +90,7 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		if err != nil {
 			return writeFailure("embed", fmt.Errorf("embed batch [%d:%d]: %w", i, j, err))
 		}
-		points := make([]qdrant.Point, 0, len(batch))
-		for k, d := range batch {
-			payload := map[string]any{"doc_id": d.ID, "source": d.Source, "type": d.Type, "timestamp_unix_ms": float64(d.Timestamp), "text": d.Text}
-			for mk, mv := range d.Metadata {
-				payload[mk] = mv
-			}
-			points = append(points, qdrant.Point{ID: PointIDFromDocID(d.ID), Vector: vecs[k], Payload: payload})
-		}
-		if err := store.Upsert(ctx, opts.Collection, points); err != nil {
+		if err := store.Upsert(ctx, opts.Collection, batch, vecs); err != nil {
 			return writeFailure("upsert", fmt.Errorf("upsert batch [%d:%d]: %w", i, j, err))
 		}
 	}
@@ -110,10 +105,4 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 
 func DefaultReportPath() string {
 	return filepath.Join(".", "ingest_report.json")
-}
-
-func PointIDFromDocID(docID string) uint64 {
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(docID))
-	return h.Sum64()
 }

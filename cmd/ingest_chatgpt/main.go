@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"personal-search/internal/chatgpt"
 	"personal-search/internal/embed"
 	"personal-search/internal/ingest"
 	"personal-search/internal/qdrant"
@@ -40,9 +41,10 @@ func main() {
 	if err != nil {
 		fatal(err.Error())
 	}
-	result, err := ingest.Run(context.Background(), ingest.Options{ExportPath: *exportPath, ReportPath: *reportPath, Collection: *collection, BatchSize: *batchSize, MaxDocs: *maxDocs}, emb, qdrant.New(*qdrantURL))
+	result, err := ingest.Run(context.Background(), ingest.Options{InputPath: *exportPath, ReportPath: *reportPath, Collection: *collection, BatchSize: *batchSize, MaxDocs: *maxDocs}, chatgpt.SourceAdapter{}, emb, qdrant.NewDocumentStore(qdrant.New(*qdrantURL)))
 	if result.Report != nil {
-		fmt.Printf("classification summary: total=%d documents=%d skipped=%d failed=%d\n", result.Report.Summary.TotalRecords, result.Report.Summary.DocumentsCreated, result.Report.Summary.Skipped, result.Report.Summary.Failed)
+		summary := result.Report.Counts()
+		fmt.Printf("classification summary: total=%d documents=%d skipped=%d failed=%d\n", summary.TotalRecords, summary.DocumentsCreated, summary.Skipped, summary.Failed)
 	}
 	if err != nil {
 		fatal(err.Error())

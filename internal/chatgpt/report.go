@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"time"
+
+	"personal-search/internal/ingestreport"
 )
 
 type ClassificationOutcome string
@@ -111,6 +113,23 @@ func (r *IngestReport) MarkCompleted() {
 	}
 	r.Status = "completed"
 	r.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+}
+
+func (r *IngestReport) Counts() ingestreport.Summary {
+	if r == nil {
+		return ingestreport.Summary{}
+	}
+	return ingestreport.Summary{
+		TotalRecords: r.Summary.TotalRecords, DocumentsCreated: r.Summary.DocumentsCreated,
+		Skipped: r.Summary.Skipped, Failed: r.Summary.Failed,
+	}
+}
+
+func (r *IngestReport) ReportState() string {
+	if r == nil {
+		return ""
+	}
+	return r.Status
 }
 
 func (r *IngestReport) Write(path string) error {

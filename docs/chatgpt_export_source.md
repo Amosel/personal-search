@@ -5,6 +5,7 @@
 This document describes the ChatGPT export source interface as implemented.
 
 This is the canonical reference for what the source accepts, reads, and guarantees.
+The shared multi-source boundary is defined in [source_adapter_contract.md](source_adapter_contract.md).
 
 ---
 
