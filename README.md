@@ -1,3 +1,5 @@
+Google Search integration: [commands, contracts and verification status](docs/google-search.md). Existing UI and MCP support explicit ChatGPT/Google source selection and inclusive UTC date filters; Google uses a separate local Ollama/Qdrant collection.
+
 # 1. System Overview (as implemented)
 
 ## Pipeline
@@ -10,7 +12,7 @@
 - Ingest CLI: [cmd/ingest_chatgpt/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/ingest_chatgpt/main.go)
 - Search server: [cmd/server/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/server/main.go)
 - Search CLI: [cmd/search_chatgpt/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/search_chatgpt/main.go)
-- MCP server: [cmd/mcp_chatgpt_search/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/mcp_chatgpt_search/main.go)
+- MCP server: [cmd/mcp_search/main.go](cmd/mcp_search/main.go); `cmd/mcp_chatgpt_search` remains a compatibility alias. Shared implementation: `internal/searchmcp`.
 - Diagnostic CLIs:
   - [cmd/ingest/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/ingest/main.go)
   - [cmd/analyze/main.go](/Users/amoselmaliah/dev/projects/personal-search/cmd/analyze/main.go)
@@ -100,7 +102,7 @@
   - `--to`
 - Behavior: builds ChatGPT-scoped search request, sends POST `/search`, emits JSON or YAML
 
-## `go run ./cmd/mcp_chatgpt_search`
+## `go run ./cmd/mcp_search` (legacy alias: `cmd/mcp_chatgpt_search`)
 
 - Flags:
   - `--server` default `http://127.0.0.1:8080`
@@ -478,3 +480,11 @@ The UI searches through the same semantic `/search` endpoint, filters by date, s
 - `cmd/ingest` and `cmd/analyze` are explicitly marked diagnostic-only in code
 - Live ChatGPT account sync: UNKNOWN
 - Additional source adapters beyond ChatGPT in production path: UNKNOWN
+
+## Local archive configuration
+
+Copy `.env.local.example` to `.env.local`, then set `CHATGPT_EXPORT_PATH`. Existing local files are preserved; `.env.local` is ignored by Git. It is a trusted shell config, sourced only by the explicit `make chatgpt-snapshot` target when no environment/Make command-line path was provided.
+
+`make chatgpt-snapshot` exports the configured path to the real-export parser snapshot test. It does not start services or index records. The test has fixed archive-specific expectations (counts/hash), so an arbitrary newer archive may fail. Bare `go test` retains its existing environment-only behavior; ingestion still requires its existing explicit argument/environment input. Configuration grants no command permissions.
+
+`make mcp` runs the generic MCP executable; `make chatgpt-mcp` and the existing wrapper MCP command remain aliases. Tool name `search_documents`, source/date arguments and default ChatGPT selection are unchanged. Reported MCP server name is now `personal-search-mcp`.

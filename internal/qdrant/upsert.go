@@ -37,7 +37,18 @@ func (c *Client) Upsert(ctx context.Context, collection string, points []Point) 
 	}
 
 	req := upsertRequest{Points: points}
-	return c.do(ctx, http.MethodPut, "/collections/"+collection+"/points?wait=true", req, nil)
+	var out struct {
+		Result struct {
+			Status string `json:"status"`
+		} `json:"result"`
+	}
+	if err := c.do(ctx, http.MethodPut, "/collections/"+collection+"/points?wait=true", req, &out); err != nil {
+		return err
+	}
+	if out.Result.Status != "completed" {
+		return fmt.Errorf("upsert completion unconfirmed: status=%q; batch may have been applied", out.Result.Status)
+	}
+	return nil
 }
 
 func validPointID(v any) bool {

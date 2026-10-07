@@ -13,6 +13,12 @@ Read in this order:
 5. [chatgpt_search_mvp_test_plan.md](/Users/amoselmaliah/dev/projects/personal-search/docs/chatgpt_search_mvp_test_plan.md)
    Coverage and acceptance bar.
 
+6. [google-search.md](google-search.md)
+   Google archive ingestion, UI/MCP source selection, compatibility checks and live verification limits.
+
+7. [google-takeout-shapes.md](google-takeout-shapes.md)
+   Primary-source export fields/formats; Takeout envelope and HTML limitations.
+
 Reference/archival:
 - [PRD.md](/Users/amoselmaliah/dev/projects/personal-search/docs/PRD.md)
 - [implementation.md](/Users/amoselmaliah/dev/projects/personal-search/docs/implementation.md)

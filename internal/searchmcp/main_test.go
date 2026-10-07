@@ -1,4 +1,4 @@
-package main
+package searchmcp
 
 import (
 	"context"
@@ -85,4 +85,28 @@ type fakeSearcher struct {
 
 func (f fakeSearcher) Search(_ context.Context, _ model.SearchRequest) (model.SearchResponse, error) {
 	return f.resp, f.err
+}
+
+type capturingSearcher struct{ request model.SearchRequest }
+
+func (s *capturingSearcher) Search(_ context.Context, r model.SearchRequest) (model.SearchResponse, error) {
+	s.request = r
+	return model.SearchResponse{Results: []model.SearchResult{}}, nil
+}
+func TestSourceAndDateForwarding(t *testing.T) {
+	for _, source := range []string{"", "google_search"} {
+		s := &capturingSearcher{}
+		h := Handler{searcher: s}
+		_, err := h.handle(context.Background(), rpcRequest{Method: "tools/call", Params: mustJSON(map[string]any{"name": "search_documents", "arguments": map[string]any{"query": "query", "source": source, "from": "2026-01-01", "to": "2026-02-01"}})})
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := source
+		if expected == "" {
+			expected = "chatgpt"
+		}
+		if s.request.Filters.Source[0] != expected || s.request.Filters.Date.From != "2026-01-01" || s.request.Filters.Date.To != "2026-02-01" {
+			t.Fatalf("request=%+v", s.request)
+		}
+	}
 }

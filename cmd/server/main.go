@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"personal-search/internal/embed"
+	"personal-search/internal/googlesearch"
 	"personal-search/internal/model"
 	"personal-search/internal/qdrant"
 )
@@ -23,15 +24,18 @@ var webFiles embedfs.FS
 
 func main() {
 	var (
-		addr        = flag.String("addr", "127.0.0.1:8080", "HTTP listen address")
-		qdrantURL   = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
-		collection  = flag.String("collection", "personal_docs", "Qdrant collection name")
-		embedder    = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
-		openaiKey   = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
-		modelName   = flag.String("model", embed.DefaultOpenAIModel, "OpenAI embedding model")
-		ollamaURL   = flag.String("ollama_url", embed.DefaultOllamaURL, "Ollama base URL")
-		ollamaModel = flag.String("ollama_model", embed.DefaultOllamaModel, "Ollama embedding model")
-		dim         = flag.Int("dim", 0, "Embedding dimension (0 = infer for Ollama)")
+		addr             = flag.String("addr", "127.0.0.1:8080", "HTTP listen address")
+		qdrantURL        = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
+		googleCollection = flag.String("google_collection", "google_search", "Dedicated Google Search collection")
+		googleModel      = flag.String("google_ollama_model", embed.DefaultOllamaModel, "Google embedding model")
+		googleURL        = flag.String("google_ollama_url", embed.DefaultOllamaURL, "Google Ollama URL")
+		collection       = flag.String("collection", "personal_docs", "Qdrant collection name")
+		embedder         = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
+		openaiKey        = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
+		modelName        = flag.String("model", embed.DefaultOpenAIModel, "OpenAI embedding model")
+		ollamaURL        = flag.String("ollama_url", embed.DefaultOllamaURL, "Ollama base URL")
+		ollamaModel      = flag.String("ollama_model", embed.DefaultOllamaModel, "Ollama embedding model")
+		dim              = flag.Int("dim", 0, "Embedding dimension (0 = infer for Ollama)")
 	)
 	flag.Parse()
 
@@ -48,6 +52,14 @@ func main() {
 		fatal(fmt.Sprintf("ensure collection: %v", err))
 	}
 
+	mux := newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel)
+
+	if err := http.ListenAndServe(*addr, mux); err != nil {
+		fatal(err.Error())
+	}
+}
+
+func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection, googleURL, googleModel string) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || (r.URL.Path != "/" && r.URL.Path != "/index.html") {
@@ -68,13 +80,17 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		count, err := qc.Count(r.Context(), *collection)
+		statusCollection := collection
+		if r.URL.Query().Get("source") == "google_search" {
+			statusCollection = googleCollection
+		}
+		count, err := qc.Count(r.Context(), statusCollection)
 		if err != nil {
 			http.Error(w, "index unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "collection": *collection, "points": count})
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "collection": statusCollection, "points": count})
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -108,13 +124,37 @@ func main() {
 			req.Limit = 20
 		}
 
-		vecs, err := emb.Embed(r.Context(), []string{req.Query})
+		searchCollection := collection
+		queryEmbedder := emb
+		isGoogle, routeErr := googleRoute(req.Filters)
+		if routeErr != nil {
+			http.Error(w, routeErr.Error(), http.StatusBadRequest)
+			return
+		}
+		if isGoogle {
+			if googleCollection == "" || googleCollection == collection {
+				http.Error(w, "Google requires a separate collection", http.StatusBadRequest)
+				return
+			}
+			googleEmb, err := googlesearch.NewEmbedder(r.Context(), googleURL, googleModel)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			if err := qc.ValidateEmbedding(r.Context(), googleCollection, googleEmb.EmbeddingIdentity(), googleEmb.Dim()); err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			searchCollection = googleCollection
+			queryEmbedder = googleEmb
+		}
+		vecs, err := queryEmbedder.Embed(r.Context(), []string{req.Query})
 		if err != nil {
 			http.Error(w, "embedding error", http.StatusInternalServerError)
 			return
 		}
 
-		out, err := qc.Search(r.Context(), *collection, qdrant.SearchRequest{
+		out, err := qc.Search(r.Context(), searchCollection, qdrant.SearchRequest{
 			Vector:      vecs[0],
 			Limit:       req.Limit,
 			WithPayload: true,
@@ -148,7 +188,7 @@ func main() {
 		const pageSize, maxMessages = 500, 5000
 		filter := &qdrant.Filter{Must: []any{qdrant.FieldCondition{
 			Key: "thread_id", Match: &qdrant.MatchValue{Value: threadID},
-		}}}
+		}, qdrant.FieldCondition{Key: "source", Match: &qdrant.MatchValue{Value: "chatgpt"}}}}
 		messages := make([]model.SearchResult, 0, pageSize)
 		var offset any
 		truncated := false
@@ -157,7 +197,7 @@ func main() {
 			if remaining := maxMessages - len(messages); remaining < limit {
 				limit = remaining
 			}
-			page, err := qc.Scroll(r.Context(), *collection, qdrant.ScrollRequest{
+			page, err := qc.Scroll(r.Context(), collection, qdrant.ScrollRequest{
 				Filter: filter, Limit: limit, Offset: offset, WithPayload: true,
 			})
 			if err != nil {
@@ -176,15 +216,15 @@ func main() {
 			}
 		}
 		sort.SliceStable(messages, func(i, j int) bool {
-			return messages[i].Timestamp < messages[j].Timestamp
+			left, _ := time.Parse(time.RFC3339Nano, messages[i].Timestamp)
+			right, _ := time.Parse(time.RFC3339Nano, messages[j].Timestamp)
+			return left.Before(right)
 		})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"results": messages, "truncated": truncated})
 	})
 
-	if err := http.ListenAndServe(*addr, mux); err != nil {
-		fatal(err.Error())
-	}
+	return mux
 }
 
 func toSearchResult(hit qdrant.ScoredPoint) model.SearchResult {
@@ -195,7 +235,7 @@ func toSearchResult(hit qdrant.ScoredPoint) model.SearchResult {
 	}
 	ts := ""
 	if ms, ok := payloadFloat(payload, "timestamp_unix_ms"); ok {
-		ts = time.UnixMilli(int64(ms)).UTC().Format(time.RFC3339)
+		ts = time.UnixMilli(int64(ms)).UTC().Format(time.RFC3339Nano)
 	}
 	return model.SearchResult{
 		ID: id, Score: hit.Score, Text: payloadString(payload, "text"),
@@ -307,4 +347,23 @@ func pointIDToString(v any) string {
 func fatal(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 	os.Exit(1)
+}
+
+// Existing source/default routing stays on the configured ChatGPT collection.
+func googleRoute(f *model.Filters) (bool, error) {
+	if f == nil {
+		return false, nil
+	}
+	for _, source := range f.Source {
+		if source == "google_search" {
+			if len(f.Source) != 1 {
+				return false, fmt.Errorf("select Google Search alone; cross-collection ranking is unsupported")
+			}
+			if f.Author != "" || f.ThreadID != "" {
+				return false, fmt.Errorf("speaker and conversation filters apply only to ChatGPT")
+			}
+			return true, nil
+		}
+	}
+	return false, nil
 }

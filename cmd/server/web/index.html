@@ -95,7 +95,7 @@
     <main>
       <section class="intro">
         <h1>Find what you remember.</h1>
-        <p>Search your ChatGPT conversations by meaning, then narrow by date or speaker.</p>
+        <p>Search ChatGPT conversations or Google Search history by meaning. Date filters use UTC days.</p>
       </section>
       <form class="search-box" id="search-form">
         <div class="query-row">
@@ -103,6 +103,7 @@
           <button class="search-button" id="search-button" type="submit">Search</button>
         </div>
         <div class="filters">
+          <label class="field">Source<select id="source"><option value="chatgpt">ChatGPT</option><option value="google_search">Google Search</option></select></label>
           <label class="field">From<input type="date" id="from" /></label>
           <label class="field">To<input type="date" id="to" /></label>
           <label class="field">Speaker<select id="author"><option value="">Anyone</option><option value="user">Me</option><option value="assistant">Assistant</option></select></label>
@@ -153,10 +154,10 @@
         const label = document.querySelector('#index-state');
         const dot = document.querySelector('#health-dot');
         try {
-          const response = await fetch('/status');
+          const response = await fetch(`/status?source=${encodeURIComponent(document.querySelector('#source').value)}`);
           if (!response.ok) throw new Error('offline');
           const info = await response.json();
-          label.textContent = `${info.points.toLocaleString()} messages indexed`;
+          label.textContent = `${info.points.toLocaleString()} records indexed`;
           dot.classList.add('ready');
         } catch (_) {
           label.textContent = 'Local index unavailable';
@@ -180,7 +181,7 @@
         const card = node('article', 'result');
         const main = node('div', 'result-main');
         const meta = node('div', 'meta');
-        const author = item.metadata?.author || 'unknown';
+        const author = item.source === 'google_search' ? `Google Search · ${item.metadata?.account || ''}` : item.metadata?.author || 'unknown';
         meta.append(node('span', `author ${author}`, author));
         meta.append(node('time', '', prettyDate(item.timestamp)));
         if (item.metadata?.title) meta.append(node('span', 'title', item.metadata.title));
@@ -188,7 +189,7 @@
         main.append(meta);
         appendMessage(main, item.text);
         const actions = node('div', 'result-actions');
-        const threadID = item.metadata?.thread_id;
+        const threadID = item.source === 'chatgpt' ? item.metadata?.thread_id : undefined;
         let threadPanel;
         if (threadID) {
           const toggle = node('button', 'text-button', 'Open conversation');
@@ -226,6 +227,23 @@
           });
           actions.append(searchInThread);
         }
+        if (item.source === 'google_search') {
+          const url = item.metadata?.url;
+          if (url) {
+            try {
+              const parsed = new URL(url);
+              if (['https:', 'http:'].includes(parsed.protocol)) {
+                const link = node('a', 'text-button', 'Original URL');
+                link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+                actions.append(link);
+              }
+            } catch (_) {}
+          }
+          const provenance = node('details', 'full-message');
+          provenance.append(node('summary', '', 'Record provenance'));
+          provenance.append(node('pre', 'message', JSON.stringify(item.metadata, null, 2)));
+          main.append(provenance);
+        }
         const copy = node('button', 'text-button', 'Copy message');
         copy.type = 'button';
         copy.addEventListener('click', async () => {
@@ -250,14 +268,15 @@
         button.disabled = true;
         button.textContent = 'Searching…';
         notice.className = 'notice';
-        notice.textContent = 'Searching your conversations…';
+        notice.textContent = 'Searching your archive…';
         resultsRoot.replaceChildren();
         resultSection.hidden = true;
-        const filters = { source: ['chatgpt'] };
+        const source = document.querySelector('#source').value;
+        const filters = { source: [source] };
         const author = document.querySelector('#author').value;
-        if (author) filters.author = author;
+        if (source === 'chatgpt' && author) filters.author = author;
         const threadID = document.querySelector('#thread-id').value.trim();
-        if (threadID) filters.thread_id = threadID;
+        if (source === 'chatgpt' && threadID) filters.thread_id = threadID;
         const from = document.querySelector('#from').value;
         const to = document.querySelector('#to').value;
         if (from || to) filters.date = { from, to };
@@ -269,7 +288,7 @@
           if (!response.ok) throw new Error((await response.text()).trim() || `Search failed (${response.status})`);
           const data = await response.json();
           const results = data.results || [];
-          document.querySelector('#result-count').textContent = `${results.length} ${results.length === 1 ? 'message' : 'messages'}`;
+          document.querySelector('#result-count').textContent = `${results.length} ${results.length === 1 ? 'record' : 'records'}`;
           if (!results.length) {
             notice.textContent = 'No matches found. Try a broader question or remove a filter.';
             return;
@@ -284,6 +303,13 @@
           button.disabled = false;
           button.textContent = 'Search';
         }
+      });
+      document.querySelector('#source').addEventListener('change', () => {
+        const google = document.querySelector('#source').value === 'google_search';
+        document.querySelector('#author').disabled = google;
+        document.querySelector('#thread-id').disabled = google;
+        resultsRoot.replaceChildren(); resultSection.hidden = true;
+        updateStatus();
       });
       updateStatus();
     </script>

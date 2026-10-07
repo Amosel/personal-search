@@ -25,6 +25,9 @@ func (d *DateRange) Validate() error {
 			return fmt.Errorf("invalid date.to: %w", err)
 		}
 	}
+	if d.From != "" && d.To != "" && d.From > d.To {
+		return fmt.Errorf("date.from must not be after date.to")
+	}
 	return nil
 }
 

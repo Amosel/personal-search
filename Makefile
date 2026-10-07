@@ -13,7 +13,7 @@ CHATGPT_FORMAT ?= json
 CHATGPT_SEARCH_ARGS ?=
 REPORT_OUT ?= ingest_report.json
 
-.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search chatgpt-mcp chatgpt-status smoke acceptance integration semantic-smoke
+.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search mcp chatgpt-mcp chatgpt-snapshot chatgpt-status smoke acceptance integration semantic-smoke
 
 qdrant-up:
 	@set -euo pipefail; \
@@ -90,8 +90,10 @@ chatgpt-search:
 		--query "$(QUERY)" \
 		$(CHATGPT_SEARCH_ARGS)
 
-chatgpt-mcp:
-	go run ./cmd/mcp_chatgpt_search \
+chatgpt-mcp: mcp
+
+mcp:
+	go run ./cmd/mcp_search \
 		--server $(CHATGPT_SERVER_URL)
 
 chatgpt-status: qdrant-up
@@ -140,3 +142,16 @@ integration: qdrant-up
 
 semantic-smoke: qdrant-up
 	bash scripts/semantic_smoke_compare.sh
+
+# Explicit private-data check; no services started and no indexing performed.
+# Environment/command-line path overrides the trusted local shell config.
+chatgpt-snapshot:
+	@set -euo pipefail; \
+	snapshot_export="$${CHATGPT_EXPORT_PATH:-}"; \
+	if [[ -z "$$snapshot_export" && -f .env.local ]]; then \
+		snapshot_export="$$( . ./.env.local; printf '%s' "$${CHATGPT_EXPORT_PATH:-}" )"; \
+	fi; \
+	if [[ -z "$$snapshot_export" ]]; then \
+		echo "Set CHATGPT_EXPORT_PATH in .env.local or the environment" >&2; exit 1; \
+	fi; \
+	CHATGPT_EXPORT_PATH="$$snapshot_export" go test ./internal/chatgpt -run '^TestSnapshot_RealExport$$' -v -count=1
