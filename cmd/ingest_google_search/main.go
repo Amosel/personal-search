@@ -11,7 +11,8 @@ import (
 )
 
 func main() {
-	input := flag.String("archive", "", "Normalized crawler archive")
+	input := flag.String("archive", "", "Normalized crawler archive or raw Google Takeout zip/html")
+	account := flag.String("account", "", "Account namespace for raw Takeout; inferred from zip when possible")
 	collection := flag.String("collection", "google_search", "Dedicated Qdrant collection")
 	endpoint := flag.String("qdrant", "http://localhost:6333", "Qdrant URL")
 	ollama := flag.String("ollama_url", embed.DefaultOllamaURL, "Local Ollama URL")
@@ -23,7 +24,7 @@ func main() {
 	if *maxDocs < 0 || *batch <= 0 || *collection == "" {
 		fail(fmt.Errorf("nonnegative max_docs, positive batch and collection required"))
 	}
-	docs, err := googlesearch.Load(*input)
+	docs, err := googlesearch.LoadPath(*input, *account)
 	if err != nil {
 		fail(err)
 	}

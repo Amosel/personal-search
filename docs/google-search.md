@@ -1,18 +1,19 @@
 # Google Search integration
 
-Input: normalized JSON archive produced by the existing external crawler. This repository does not acquire Google history or modify that crawler. No dependencies added. Raw export shape research: [google-takeout-shapes.md](google-takeout-shapes.md); incoming Takeout is pending, so raw parsing/full-history import is deferred.
+Input: normalized JSON archive produced by the existing external crawler, or raw Google Takeout ZIP/HTML containing `Takeout/My Activity/Search/MyActivity.html`. This repository does not acquire Google history or modify that crawler. No dependencies added. Raw export shape notes: [google-takeout-shapes.md](google-takeout-shapes.md).
 
 ## Import
 
 ```sh
 go run ./cmd/ingest_google_search --archive /path/google-search.json --dry-run
+go run ./cmd/ingest_google_search --archive /path/takeout.zip --dry-run
 # First import bounded to 20 records:
 go run ./cmd/ingest_google_search --archive /path/google-search.json --max_docs 20
 # After verifying retrieval and repeat import, complete the archive:
 go run ./cmd/ingest_google_search --archive /path/google-search.json
 ```
 
-Defaults: local Qdrant localhost:6333, local Ollama localhost:11434, model nomic-embed-text:latest, dedicated collection google_search, batch 8. Override with --qdrant, --ollama_url, --ollama_model, --collection, --batch. --max_docs 0 imports all; dry-run validates the entire archive without service calls. Service startup and model installation are separate operator actions; neither happens automatically.
+Defaults: local Qdrant localhost:6333, local Ollama localhost:11434, model nomic-embed-text:latest, dedicated collection google_search, batch 8. Override with --qdrant, --ollama_url, --ollama_model, --collection, --batch. `--account` supplies the account namespace for raw HTML; raw ZIP imports infer it from `Takeout/Google Account/*.SubscriberInfo.html` when present. --max_docs 0 imports all; dry-run validates the entire archive without service calls. Service startup and model installation are separate operator actions; neither happens automatically.
 
 Archive contract: `{schema_version:1, source:"google_search", documents:[Document], report:{...}}`. Document source google_search, type search_query, positive Unix-millisecond timestamp, query text, canonical ID. Required metadata: account namespace, original URL field (may be empty if the original had none), raw record, nonempty provenance array with locator, 64-hex SHA-256, nonnegative integer record_index. Reserved payload keys are rejected. JSON numeric values in raw records retain their representation.
 

@@ -1,6 +1,6 @@
 # Google Search export shapes
 
-Research date: 2026-10-07. Actual incoming Takeout export is pending. Research only: no crawler executed or changed, no new raw-Takeout parser claimed.
+Research date: 2026-10-07; verified against delivered Takeout on 2026-10-11.
 
 ## Search history
 
@@ -34,6 +34,8 @@ These are separate datasets; they must not be classified automatically as timest
 
 [Google Takeout help](https://support.google.com/accounts/answer/3024190?hl=en) documents ZIP and TGZ archive delivery, archive splitting, and an `archive_browser.html` format guide. Container format is separate from the records inside it. Inventory every delivered part before declaring coverage.
 
-When the export arrives: inspect its archive browser and member inventory; identify actual Search activity JSON/HTML; inspect a bounded sample; record field presence/types, event categories, timestamp precision/timezone, optional URL/attachments and language. Confirm account namespace explicitly. Preserve original bytes, source hash and record locator before normalization.
+Delivered archive inventory: `takeout-20261011T151418Z-1-001.zip` contains `Takeout/My Activity/Search/MyActivity.html`; `takeout-20261011T151418Z-2-001.zip` contains YouTube history including `Takeout/YouTube and YouTube Music/history/search-history.html`, but no Google Search My Activity file. Both ZIP containers passed integrity checks.
 
-Current personal-search Google loader accepts only the normalized archive described in [google-search.md](google-search.md), not raw Takeout JSON/HTML/ZIP/TGZ. Existing external crawler's array layout and English Search-directory assumptions are implementation assumptions, not established by the official field reference. Native HTML parsing remains unimplemented; no timestamp timezone or DOM layout will be invented.
+Observed Google Search cards are HTML, one activity card per `<div class="outer-cell ...">`. Search cards use title `Search` and a first content cell containing one or more `<br>`-separated lines: action/link text, optional extra detail line, then a timestamp such as `Oct 11, 2026, 9:42:57 AM EDT`. Observed actions include `Searched for`, `Visited`, `Viewed`, `Used Search`, and `Ran internet speed test`; the speed-test shape adds a `Test run by Measurement Lab` link line before the timestamp. The raw parser keeps the card hash and locator in provenance, preserves the raw fields in metadata, infers the ZIP account from `Takeout/Google Account/*.SubscriberInfo.html`, and normalizes only `Takeout/My Activity/Search/MyActivity.html` into the `google_search` collection contract.
+
+Current personal-search Google loader accepts the normalized archive described in [google-search.md](google-search.md), plus raw Google Takeout ZIP/HTML for the Search My Activity file. YouTube search history in part 2 is intentionally not classified as Google Search activity by this loader.

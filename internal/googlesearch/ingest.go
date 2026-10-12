@@ -1,18 +1,23 @@
 package googlesearch
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"os"
+	"path/filepath"
 	"personal-search/internal/embed"
 	"personal-search/internal/model"
 	"personal-search/internal/qdrant"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Archive struct {
@@ -50,6 +55,79 @@ func Load(path string) ([]model.Document, error) {
 	return a.Documents, nil
 }
 
+func LoadPath(path, account string) ([]model.Document, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".zip":
+		return LoadTakeoutZIP(path, account)
+	case ".html", ".htm":
+		if strings.TrimSpace(account) == "" {
+			account = "personal"
+		}
+		return LoadTakeoutHTMLFile(path, account, path)
+	default:
+		return Load(path)
+	}
+}
+
+func LoadTakeoutZIP(path, account string) ([]model.Document, error) {
+	zr, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, err
+	}
+	defer zr.Close()
+	if strings.TrimSpace(account) == "" {
+		account = inferGoogleAccount(zr.File)
+	}
+	if strings.TrimSpace(account) == "" {
+		return nil, fmt.Errorf("account namespace required for raw Takeout zip")
+	}
+	var docs []model.Document
+	for _, f := range zr.File {
+		if f.Name != "Takeout/My Activity/Search/MyActivity.html" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(rc)
+		closeErr := rc.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		docs, err = parseTakeoutSearchHTML(data, account, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("Takeout/My Activity/Search/MyActivity.html not found or produced no documents")
+	}
+	if err := ValidateDocuments(docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
+func LoadTakeoutHTMLFile(path, account, locator string) ([]model.Document, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	docs, err := parseTakeoutSearchHTML(data, account, locator)
+	if err != nil {
+		return nil, err
+	}
+	if err := ValidateDocuments(docs); err != nil {
+		return nil, err
+	}
+	return docs, nil
+}
+
 // PointID uses a deterministic 128-bit UUID derived from the canonical event ID.
 func PointID(id string) string {
 	h := sha256.Sum256([]byte("google_search:" + id))
@@ -74,9 +152,7 @@ func ValidateDocuments(docs []model.Document) error {
 		if !ok || strings.TrimSpace(account) == "" {
 			return fmt.Errorf("document %d: account namespace required", i)
 		}
-		identity := "[\"google_search\"," + identityString(account) + "," + strconv.FormatInt(d.Timestamp, 10) + "," + identityString(d.Text) + "]"
-		hash := sha256.Sum256([]byte(identity))
-		if d.ID != hex.EncodeToString(hash[:]) {
+		if d.ID != documentID(account, d.Timestamp, d.Text) {
 			return fmt.Errorf("document %d: ID does not match account/timestamp/query identity", i)
 		}
 		if _, ok := d.Metadata["url"].(string); !ok {
@@ -109,6 +185,166 @@ func ValidateDocuments(docs []model.Document) error {
 		}
 	}
 	return nil
+}
+
+var (
+	cardStartRE = regexp.MustCompile(`<div class="outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp">`)
+	titleRE     = regexp.MustCompile(`(?s)<p class="mdl-typography--title">(.*?)<br></p>`)
+	contentRE   = regexp.MustCompile(`(?s)<div class="content-cell mdl-cell mdl-cell--6-col mdl-typography--body-1">(.*?)</div>`)
+	linkRE      = regexp.MustCompile(`(?s)<a href="([^"]*)">(.*?)</a>`)
+	tagRE       = regexp.MustCompile(`(?s)<[^>]+>`)
+	spaceRE     = regexp.MustCompile(`[ \t\r\n]+`)
+)
+
+func parseTakeoutSearchHTML(data []byte, account, locator string) ([]model.Document, error) {
+	parts := cardStartRE.Split(string(data), -1)
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("no Google Takeout activity cards found")
+	}
+	docs := make([]model.Document, 0, len(parts)-1)
+	seen := map[string]bool{}
+	for i, part := range parts[1:] {
+		card := `<div class="outer-cell mdl-cell mdl-cell--12-col mdl-shadow--2dp">` + part
+		title := firstClean(titleRE, card)
+		if title != "Search" {
+			continue
+		}
+		content := contentRE.FindStringSubmatch(card)
+		if len(content) != 2 {
+			return nil, fmt.Errorf("%s card %d: content shape not recognized", locator, i)
+		}
+		actionHTML, timestampText, err := splitTakeoutContent(content[1])
+		if err != nil {
+			return nil, fmt.Errorf("%s card %d: %w", locator, i, err)
+		}
+		t, err := parseTakeoutTime(timestampText)
+		if err != nil {
+			return nil, fmt.Errorf("%s card %d: %w", locator, i, err)
+		}
+		action, href, text := parseTakeoutAction(actionHTML)
+		if text == "" {
+			text = action
+		}
+		if text == "" {
+			return nil, fmt.Errorf("%s card %d: empty activity text", locator, i)
+		}
+		h := sha256.Sum256([]byte(card))
+		rawHash := hex.EncodeToString(h[:])
+		raw := map[string]any{
+			"title":          title,
+			"action":         action,
+			"text":           text,
+			"url":            href,
+			"time":           timestampText,
+			"source_format":  "google_takeout_my_activity_html",
+			"source_locator": locator,
+		}
+		d := model.Document{
+			Source:    "google_search",
+			Type:      "search_query",
+			Timestamp: t.UnixMilli(),
+			Text:      text,
+			Metadata: map[string]any{
+				"account": account,
+				"url":     href,
+				"raw":     raw,
+				"provenance": []any{map[string]any{
+					"locator":      locator,
+					"sha256":       rawHash,
+					"record_index": float64(i),
+				}},
+			},
+		}
+		d.ID = documentID(account, d.Timestamp, d.Text)
+		if seen[d.ID] {
+			continue
+		}
+		seen[d.ID] = true
+		docs = append(docs, d)
+	}
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("no Search activity documents parsed from %s", locator)
+	}
+	return docs, nil
+}
+
+func parseTakeoutAction(s string) (action, href, text string) {
+	if m := linkRE.FindStringSubmatch(s); len(m) == 3 {
+		href = html.UnescapeString(m[1])
+		text = cleanHTML(m[2])
+		action = cleanHTML(s[:strings.Index(s, m[0])])
+		return action, href, text
+	}
+	action = cleanHTML(s)
+	return action, "", action
+}
+
+func splitTakeoutContent(s string) (actionHTML, timestampText string, err error) {
+	lines := strings.Split(s, "<br>")
+	nonEmpty := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if cleanHTML(line) != "" {
+			nonEmpty = append(nonEmpty, line)
+		}
+	}
+	if len(nonEmpty) < 2 {
+		return "", "", fmt.Errorf("content has fewer than two nonempty lines")
+	}
+	timestampText = cleanHTML(nonEmpty[len(nonEmpty)-1])
+	actionHTML = strings.Join(nonEmpty[:len(nonEmpty)-1], " ")
+	return actionHTML, timestampText, nil
+}
+
+func parseTakeoutTime(s string) (time.Time, error) {
+	cleaned := normalizeSpace(s)
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, err := time.ParseInLocation("Jan 2, 2006, 3:04:05 PM MST", cleaned, loc)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("parse time %q: %w", s, err)
+	}
+	return t, nil
+}
+
+func firstClean(re *regexp.Regexp, s string) string {
+	m := re.FindStringSubmatch(s)
+	if len(m) < 2 {
+		return ""
+	}
+	return cleanHTML(m[1])
+}
+
+func cleanHTML(s string) string {
+	s = strings.ReplaceAll(s, "<br>", "\n")
+	s = tagRE.ReplaceAllString(s, "")
+	return normalizeSpace(html.UnescapeString(s))
+}
+
+func normalizeSpace(s string) string {
+	s = strings.ReplaceAll(s, "\u00a0", " ")
+	s = strings.ReplaceAll(s, "\u202f", " ")
+	s = strings.ReplaceAll(s, "\u200e", "")
+	s = strings.ReplaceAll(s, "\u200f", "")
+	return strings.TrimSpace(spaceRE.ReplaceAllString(s, " "))
+}
+
+func inferGoogleAccount(files []*zip.File) string {
+	for _, f := range files {
+		if !strings.HasPrefix(f.Name, "Takeout/Google Account/") || !strings.HasSuffix(f.Name, ".SubscriberInfo.html") {
+			continue
+		}
+		base := filepath.Base(f.Name)
+		return strings.TrimSuffix(base, ".SubscriberInfo.html")
+	}
+	return ""
+}
+
+func documentID(account string, timestamp int64, text string) string {
+	identity := "[\"google_search\"," + identityString(account) + "," + strconv.FormatInt(timestamp, 10) + "," + identityString(text) + "]"
+	hash := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(hash[:])
 }
 
 type Store interface {
