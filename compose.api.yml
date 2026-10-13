@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      ADDR: ":8080"
+      QDRANT_URL: "${QDRANT_URL:-http://qdrant:6333}"
+      COLLECTION: "${COLLECTION:-personal_docs}"
+      GOOGLE_COLLECTION: "${GOOGLE_COLLECTION:-google_search}"
+      EMBEDDER: "${EMBEDDER:-ollama}"
+      OLLAMA_URL: "${OLLAMA_URL:-http://host.docker.internal:11434}"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-nomic-embed-text:latest}"
+      GOOGLE_OLLAMA_URL: "${GOOGLE_OLLAMA_URL:-http://host.docker.internal:11434}"
+      GOOGLE_OLLAMA_MODEL: "${GOOGLE_OLLAMA_MODEL:-nomic-embed-text:latest}"
+      PERSONAL_SEARCH_API_TOKEN: "${PERSONAL_SEARCH_API_TOKEN:?set PERSONAL_SEARCH_API_TOKEN}"

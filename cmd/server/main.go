@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	embedfs "embed"
 	"encoding/json"
 	"flag"
@@ -25,18 +26,19 @@ var webFiles embedfs.FS
 
 func main() {
 	var (
-		addr             = flag.String("addr", "127.0.0.1:8080", "HTTP listen address")
-		qdrantURL        = flag.String("qdrant", "http://localhost:6333", "Qdrant base URL")
-		googleCollection = flag.String("google_collection", "google_search", "Dedicated Google Search collection")
-		googleModel      = flag.String("google_ollama_model", embed.DefaultOllamaModel, "Google embedding model")
-		googleURL        = flag.String("google_ollama_url", embed.DefaultOllamaURL, "Google Ollama URL")
-		collection       = flag.String("collection", "personal_docs", "Qdrant collection name")
-		embedder         = flag.String("embedder", "openai", "Embedding provider: openai|fake|ollama")
+		addr             = flag.String("addr", defaultAddr(), "HTTP listen address")
+		qdrantURL        = flag.String("qdrant", envDefault("QDRANT_URL", "http://localhost:6333"), "Qdrant base URL")
+		googleCollection = flag.String("google_collection", envDefault("GOOGLE_COLLECTION", "google_search"), "Dedicated Google Search collection")
+		googleModel      = flag.String("google_ollama_model", envDefault("GOOGLE_OLLAMA_MODEL", embed.DefaultOllamaModel), "Google embedding model")
+		googleURL        = flag.String("google_ollama_url", envDefault("GOOGLE_OLLAMA_URL", embed.DefaultOllamaURL), "Google Ollama URL")
+		collection       = flag.String("collection", envDefault("COLLECTION", "personal_docs"), "Qdrant collection name")
+		embedder         = flag.String("embedder", envDefault("EMBEDDER", "openai"), "Embedding provider: openai|fake|ollama")
 		openaiKey        = flag.String("openai_key", os.Getenv("OPENAI_API_KEY"), "OpenAI API key")
-		modelName        = flag.String("model", embed.DefaultOpenAIModel, "OpenAI embedding model")
-		ollamaURL        = flag.String("ollama_url", embed.DefaultOllamaURL, "Ollama base URL")
-		ollamaModel      = flag.String("ollama_model", embed.DefaultOllamaModel, "Ollama embedding model")
-		dim              = flag.Int("dim", 0, "Embedding dimension (0 = infer for Ollama)")
+		modelName        = flag.String("model", envDefault("OPENAI_MODEL", embed.DefaultOpenAIModel), "OpenAI embedding model")
+		ollamaURL        = flag.String("ollama_url", envDefault("OLLAMA_URL", embed.DefaultOllamaURL), "Ollama base URL")
+		ollamaModel      = flag.String("ollama_model", envDefault("OLLAMA_MODEL", embed.DefaultOllamaModel), "Ollama embedding model")
+		dim              = flag.Int("dim", envInt("DIM", 0), "Embedding dimension (0 = infer for Ollama)")
+		apiToken         = flag.String("api_token", os.Getenv("PERSONAL_SEARCH_API_TOKEN"), "Bearer token required for non-health HTTP routes")
 	)
 	flag.Parse()
 
@@ -53,9 +55,9 @@ func main() {
 		fatal(fmt.Sprintf("ensure collection: %v", err))
 	}
 
-	mux := newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel)
+	handler := requireAPIToken(newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel), *apiToken)
 
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	if err := http.ListenAndServe(*addr, handler); err != nil {
 		fatal(err.Error())
 	}
 }
@@ -376,6 +378,66 @@ func pointIDToString(v any) string {
 func fatal(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
 	os.Exit(1)
+}
+
+func requireAPIToken(next http.Handler, token string) http.Handler {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if hasAPIToken(r, token) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Bearer realm="personal-search"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	})
+}
+
+func hasAPIToken(r *http.Request, token string) bool {
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(auth, "Bearer ") && constantTimeEqual(strings.TrimSpace(strings.TrimPrefix(auth, "Bearer ")), token) {
+		return true
+	}
+	return constantTimeEqual(strings.TrimSpace(r.Header.Get("X-API-Key")), token)
+}
+
+func constantTimeEqual(got, want string) bool {
+	if got == "" || want == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+}
+
+func envDefault(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func defaultAddr() string {
+	if port := strings.TrimSpace(os.Getenv("PORT")); port != "" {
+		return ":" + port
+	}
+	return envDefault("ADDR", "127.0.0.1:8080")
 }
 
 // Existing source/default routing stays on the configured ChatGPT collection.

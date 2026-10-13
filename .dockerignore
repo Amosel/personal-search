@@ -1,0 +1,8 @@
+.git
+.cache
+tmp
+*.zip
+ingest_report.json
+qdrant_data
+node_modules
+dist
