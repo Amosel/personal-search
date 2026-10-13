@@ -136,6 +136,8 @@ curl -s http://127.0.0.1:18080/search \
 
 The response has a `results` array; each result contains `id`, `score`, `text`, `timestamp`, `source`, and `metadata`. To search Google, set `filters.source` to `["google_search"]` and omit ChatGPT-only author and conversation filters. Both sources accept `filters.date` with `from` and/or `to` in `YYYY-MM-DD` format.
 
+For containerized or online API deployment, use [API deployment](docs/api-deployment.md). It covers the Docker image, compose overlay, required `PERSONAL_SEARCH_API_TOKEN`, and the rule that Qdrant and Ollama should stay private rather than publicly exposed.
+
 To expose search to an MCP client, configure it to launch this command from the repository root while the HTTP server is running:
 
 ```sh
@@ -174,5 +176,6 @@ For the optional real-export parser snapshot check, copy [`.env.local.example`](
 - [ChatGPT workflow and commands](docs/chatgpt_search_mvp.md)
 - [ChatGPT source and parsing contract](docs/chatgpt_export_source.md)
 - [Google Search integration](docs/google-search.md)
+- [API deployment](docs/api-deployment.md)
 - [Test plan](docs/chatgpt_search_mvp_test_plan.md)
 - [Documentation index](docs/README.md)
