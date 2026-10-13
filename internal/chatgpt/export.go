@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -53,7 +54,8 @@ type Content struct {
 }
 
 // LoadExport loads and parses a ChatGPT export.
-// Accepts either a JSON file or ZIP archive containing conversations.json.
+// Accepts either a JSON file or ZIP archive containing conversations.json or
+// split conversations-000.json parts.
 // Returns error if file doesn't exist or JSON is malformed.
 // Handles both {conversations:[]} and [] array formats.
 func LoadExport(path string) (*Export, error) {
@@ -66,7 +68,7 @@ func LoadExport(path string) (*Export, error) {
 	return loadFromJSON(path)
 }
 
-// loadFromZIP extracts and parses conversations.json from a ZIP archive.
+// loadFromZIP extracts and parses conversations from a ZIP archive.
 func loadFromZIP(zipPath string) (*Export, error) {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -74,7 +76,7 @@ func loadFromZIP(zipPath string) (*Export, error) {
 	}
 	defer r.Close()
 
-	// Find conversations.json
+	var split []*zip.File
 	for _, f := range r.File {
 		if filepath.Base(f.Name) == "conversations.json" {
 			rc, err := f.Open()
@@ -85,9 +87,51 @@ func loadFromZIP(zipPath string) (*Export, error) {
 
 			return parseJSON(rc)
 		}
+		if isSplitConversationsFile(filepath.Base(f.Name)) {
+			split = append(split, f)
+		}
 	}
 
-	return nil, fmt.Errorf("conversations.json not found in ZIP archive")
+	if len(split) > 0 {
+		sort.Slice(split, func(i, j int) bool {
+			return filepath.Base(split[i].Name) < filepath.Base(split[j].Name)
+		})
+		out := &Export{Conversations: make([]Conversation, 0)}
+		for _, f := range split {
+			rc, err := f.Open()
+			if err != nil {
+				return nil, fmt.Errorf("failed to open %s: %w", f.Name, err)
+			}
+			part, err := parseJSON(rc)
+			closeErr := rc.Close()
+			if err != nil {
+				return nil, fmt.Errorf("parse %s: %w", f.Name, err)
+			}
+			if closeErr != nil {
+				return nil, fmt.Errorf("close %s: %w", f.Name, closeErr)
+			}
+			out.Conversations = append(out.Conversations, part.Conversations...)
+		}
+		return out, nil
+	}
+
+	return nil, fmt.Errorf("conversations.json or conversations-*.json not found in ZIP archive")
+}
+
+func isSplitConversationsFile(name string) bool {
+	if !strings.HasPrefix(name, "conversations-") || !strings.HasSuffix(name, ".json") {
+		return false
+	}
+	mid := strings.TrimSuffix(strings.TrimPrefix(name, "conversations-"), ".json")
+	if mid == "" {
+		return false
+	}
+	for _, r := range mid {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // loadFromJSON loads and parses a JSON file.

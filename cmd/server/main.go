@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"personal-search/internal/embed"
@@ -61,6 +62,12 @@ func main() {
 
 func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection, googleURL, googleModel string) *http.ServeMux {
 	mux := http.NewServeMux()
+	googleRuntime := &validatedGoogleRuntime{
+		qc:         qc,
+		collection: googleCollection,
+		baseURL:    googleURL,
+		model:      googleModel,
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || (r.URL.Path != "/" && r.URL.Path != "/index.html") {
 			http.NotFound(w, r)
@@ -136,13 +143,9 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 				http.Error(w, "Google requires a separate collection", http.StatusBadRequest)
 				return
 			}
-			googleEmb, err := googlesearch.NewEmbedder(r.Context(), googleURL, googleModel)
+			googleEmb, err := googleRuntime.embedder(r.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
-				return
-			}
-			if err := qc.ValidateEmbedding(r.Context(), googleCollection, googleEmb.EmbeddingIdentity(), googleEmb.Dim()); err != nil {
-				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
 			searchCollection = googleCollection
@@ -225,6 +228,32 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 	})
 
 	return mux
+}
+
+type validatedGoogleRuntime struct {
+	mu         sync.Mutex
+	qc         *qdrant.Client
+	collection string
+	baseURL    string
+	model      string
+	cached     *googlesearch.PinnedEmbedder
+}
+
+func (r *validatedGoogleRuntime) embedder(ctx context.Context) (*googlesearch.PinnedEmbedder, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.cached != nil {
+		return r.cached, nil
+	}
+	emb, err := googlesearch.NewEmbedder(ctx, r.baseURL, r.model)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.qc.ValidateEmbedding(ctx, r.collection, emb.EmbeddingIdentity(), emb.Dim()); err != nil {
+		return nil, err
+	}
+	r.cached = emb
+	return emb, nil
 }
 
 func toSearchResult(hit qdrant.ScoredPoint) model.SearchResult {

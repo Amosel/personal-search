@@ -1,6 +1,10 @@
 SHELL := /bin/bash
 
 QDRANT_URL ?= http://localhost:6333
+QDRANT_RUNTIME ?= container
+QDRANT_IMAGE ?= qdrant/qdrant:latest
+QDRANT_CONTAINER_NAME ?= personal-search-qdrant
+QDRANT_VOLUME_NAME ?= personal-search-qdrant-data
 CHATGPT_COLLECTION ?= chatgpt_messages
 CHATGPT_SERVER_ADDR ?= 127.0.0.1:18080
 CHATGPT_SERVER_URL ?= http://$(CHATGPT_SERVER_ADDR)
@@ -20,11 +24,67 @@ qdrant-up:
 	if curl -sf $(QDRANT_URL)/collections >/dev/null 2>&1; then \
 		echo "qdrant already reachable at $(QDRANT_URL)"; \
 	else \
-		docker compose up -d qdrant; \
+		case "$(QDRANT_RUNTIME)" in \
+			container) \
+				if ! command -v container >/dev/null 2>&1; then \
+					echo "Apple container CLI not found. Install it, or run QDRANT_RUNTIME=docker make qdrant-up." >&2; \
+					exit 1; \
+				fi; \
+				if ! container system status >/dev/null 2>&1; then \
+					echo "Apple container services are not running. Start them with: container system start" >&2; \
+					exit 1; \
+				fi; \
+				if ! container volume inspect $(QDRANT_VOLUME_NAME) >/dev/null 2>&1; then \
+					container volume create $(QDRANT_VOLUME_NAME) >/dev/null; \
+				fi; \
+				if container inspect $(QDRANT_CONTAINER_NAME) >/dev/null 2>&1; then \
+					container start $(QDRANT_CONTAINER_NAME) >/dev/null 2>&1 || true; \
+				else \
+					container run -d \
+						--name $(QDRANT_CONTAINER_NAME) \
+						-p 6333:6333 \
+						-p 6334:6334 \
+						-v $(QDRANT_VOLUME_NAME):/qdrant/storage \
+						$(QDRANT_IMAGE) >/dev/null; \
+				fi; \
+				;; \
+			docker) \
+				docker compose up -d qdrant; \
+				;; \
+			*) \
+				echo "Unsupported QDRANT_RUNTIME=$(QDRANT_RUNTIME). Use 'container' or 'docker'." >&2; \
+				exit 1; \
+				;; \
+		esac; \
+		for i in {1..100}; do \
+			if curl -sf $(QDRANT_URL)/collections >/dev/null 2>&1; then \
+				echo "qdrant reachable at $(QDRANT_URL)"; \
+				exit 0; \
+			fi; \
+			sleep 0.2; \
+		done; \
+		echo "qdrant did not become reachable at $(QDRANT_URL)" >&2; \
+		exit 1; \
 	fi
 
 qdrant-down:
-	docker compose down
+	@set -euo pipefail; \
+	case "$(QDRANT_RUNTIME)" in \
+		container) \
+			if ! command -v container >/dev/null 2>&1; then \
+				echo "Apple container CLI not found. Nothing to stop." >&2; \
+				exit 0; \
+			fi; \
+			container stop $(QDRANT_CONTAINER_NAME) >/dev/null 2>&1 || true; \
+			;; \
+		docker) \
+			docker compose down; \
+			;; \
+		*) \
+			echo "Unsupported QDRANT_RUNTIME=$(QDRANT_RUNTIME). Use 'container' or 'docker'." >&2; \
+			exit 1; \
+			;; \
+	esac
 
 qdrant-status:
 	curl -sf $(QDRANT_URL)/collections | jq .

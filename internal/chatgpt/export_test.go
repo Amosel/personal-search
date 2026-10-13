@@ -1,6 +1,7 @@
 package chatgpt
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -139,5 +140,44 @@ func TestLoadExport_ObjectFormatWithExtraFields(t *testing.T) {
 
 	if len(exp.Conversations) != 1 {
 		t.Fatalf("expected 1 conversation, got %d", len(exp.Conversations))
+	}
+}
+
+func TestLoadExport_SplitZipFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "export.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for name, content := range map[string]string{
+		"conversations-001.json": `[{"id":"conv2","title":"Second","mapping":{}}]`,
+		"conversations-000.json": `[{"id":"conv1","title":"First","mapping":{}}]`,
+	} {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	exp, err := LoadExport(path)
+	if err != nil {
+		t.Fatalf("LoadExport failed: %v", err)
+	}
+	if len(exp.Conversations) != 2 {
+		t.Fatalf("expected 2 conversations, got %d", len(exp.Conversations))
+	}
+	if exp.Conversations[0].ID != "conv1" || exp.Conversations[1].ID != "conv2" {
+		t.Fatalf("unexpected order: %+v", exp.Conversations)
 	}
 }

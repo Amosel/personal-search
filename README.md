@@ -394,17 +394,19 @@ Google Search integration: [commands, contracts and verification status](docs/go
 
 # 8. Tooling / Runtime
 
-## Docker
+## Qdrant runtime
 
-- [docker-compose.yml](/Users/amoselmaliah/dev/projects/personal-search/docker-compose.yml)
-- Service: `qdrant`
+- Default runtime: Apple `container`
+- Container: `personal-search-qdrant`
 - Image: `qdrant/qdrant:latest`
 - Ports: `6333`, `6334`
-- Volume: `qdrant_data:/qdrant/storage`
+- Volume: `personal-search-qdrant-data:/qdrant/storage`
+- Docker Compose fallback: `QDRANT_RUNTIME=docker make qdrant-up`
+- [docker-compose.yml](/Users/amoselmaliah/dev/projects/personal-search-container-runtime/docker-compose.yml) remains available for Docker.
 
 ## Make commands
 
-- [Makefile](/Users/amoselmaliah/dev/projects/personal-search/Makefile)
+- [Makefile](/Users/amoselmaliah/dev/projects/personal-search-container-runtime/Makefile)
 - `qdrant-up`
 - `qdrant-down`
 - `qdrant-status`
@@ -423,6 +425,10 @@ Google Search integration: [commands, contracts and verification status](docs/go
 ## Make defaults
 
 - `QDRANT_URL=http://localhost:6333`
+- `QDRANT_RUNTIME=container`
+- `QDRANT_IMAGE=qdrant/qdrant:latest`
+- `QDRANT_CONTAINER_NAME=personal-search-qdrant`
+- `QDRANT_VOLUME_NAME=personal-search-qdrant-data`
 - `CHATGPT_COLLECTION=chatgpt_messages`
 - `CHATGPT_SERVER_ADDR=127.0.0.1:18080`
 - `CHATGPT_SERVER_URL=http://127.0.0.1:18080`

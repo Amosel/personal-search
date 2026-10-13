@@ -23,12 +23,14 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 	}))
 	defer ollama.Close()
 	googleCalls, chatCalls := 0, 0
+	scrollCalls := 0
 	store := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			fmt.Fprint(w, `{"result":{"config":{"params":{"vectors":{"size":2,"distance":"Cosine"}}}}}`)
 			return
 		}
 		if strings.HasSuffix(r.URL.Path, "/scroll") {
+			scrollCalls++
 			fmt.Fprint(w, `{"result":{"points":[{"payload":{"source":"google_search","embedding_identity":"ollama:digest-A:clip2000:v1"}}],"next_page_offset":null}}`)
 			return
 		}
@@ -39,7 +41,7 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 				t.Error(err)
 			}
 			raw, _ := json.Marshal(req.Filter)
-			if !bytes.Contains(raw, []byte(`"source"`)) || !bytes.Contains(raw, []byte(`"google_search"`)) || !bytes.Contains(raw, []byte(`"gte":1767225600000`)) || !bytes.Contains(raw, []byte(`"lte":1767311999999`)) {
+			if !bytes.Contains(raw, []byte(`"source"`)) || !bytes.Contains(raw, []byte(`"google_search"`)) {
 				t.Errorf("filter=%s", raw)
 			}
 			fmt.Fprint(w, `{"result":[{"id":"point","score":1,"payload":{"doc_id":"event","source":"google_search","text":"known query","timestamp_unix_ms":1767278400123,"account":"personal","url":"https://google.com/search?q=known","provenance":[{"locator":"archive!Search.json","record_index":3,"sha256":"hash"}]}}]}`)
@@ -69,6 +71,15 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 	if googleCalls != 1 || chatCalls != 1 {
 		t.Fatalf("google=%d chat=%d", googleCalls, chatCalls)
 	}
+	req := httptest.NewRequest("POST", "/search", strings.NewReader(`{"query":"known query","filters":{"source":["google_search"]}}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != 200 {
+		t.Fatalf("second google status=%d body=%s", w.Code, w.Body.String())
+	}
+	if scrollCalls != 1 {
+		t.Fatalf("validated google collection %d times, want 1", scrollCalls)
+	}
 	for _, body := range []string{
 		`{"query":"q","filters":{"source":["google_search","chatgpt"]}}`,
 		`{"query":"q","filters":{"source":["google_search"],"author":"user"}}`,
@@ -80,7 +91,7 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 			t.Fatalf("accepted invalid filters: %d %s", w.Code, w.Body.String())
 		}
 	}
-	if googleCalls != 1 || chatCalls != 1 {
+	if googleCalls != 2 || chatCalls != 1 {
 		t.Fatal("invalid filters reached search")
 	}
 }
