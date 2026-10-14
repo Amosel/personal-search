@@ -38,6 +38,10 @@ func main() {
 		ollamaURL        = flag.String("ollama_url", envDefault("OLLAMA_URL", embed.DefaultOllamaURL), "Ollama base URL")
 		ollamaModel      = flag.String("ollama_model", envDefault("OLLAMA_MODEL", embed.DefaultOllamaModel), "Ollama embedding model")
 		dim              = flag.Int("dim", envInt("DIM", 0), "Embedding dimension (0 = infer for Ollama)")
+		notesCollection  = flag.String("notes_collection", envDefault("NOTES_COLLECTION", "apple_notes"), "Apple Notes collection")
+		voiceCollection  = flag.String("voice_collection", envDefault("VOICE_COLLECTION", "voicememo"), "VoiceMemo collection")
+		appleURL         = flag.String("apple_ollama_url", envDefault("APPLE_OLLAMA_URL", embed.DefaultOllamaURL), "Apple sources Ollama URL")
+		appleModel       = flag.String("apple_ollama_model", envDefault("APPLE_OLLAMA_MODEL", embed.DefaultOllamaModel), "Apple sources embedding model")
 		apiToken         = flag.String("api_token", os.Getenv("PERSONAL_SEARCH_API_TOKEN"), "Bearer token required for non-health HTTP routes")
 	)
 	flag.Parse()
@@ -55,21 +59,34 @@ func main() {
 		fatal(fmt.Sprintf("ensure collection: %v", err))
 	}
 
-	handler := requireAPIToken(newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel), *apiToken)
+	handler := requireAPIToken(newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel, appleConfig{*notesCollection, *voiceCollection, *appleURL, *appleModel}), *apiToken)
 
 	if err := http.ListenAndServe(*addr, handler); err != nil {
 		fatal(err.Error())
 	}
 }
 
-func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection, googleURL, googleModel string) *http.ServeMux {
+func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection, googleURL, googleModel string, configs ...appleConfig) *http.ServeMux {
 	mux := http.NewServeMux()
-	googleRuntime := &validatedGoogleRuntime{
+	config := appleConfig{"apple_notes", "voicememo", googleURL, googleModel}
+	if len(configs) > 0 {
+		config = configs[0]
+	}
+	collections := map[string]string{"chatgpt": collection, "google_search": googleCollection, "apple_notes": config.notes, "voicememo": config.voice}
+	runtimes := map[string]*validatedSourceRuntime{}
+	for source, name := range collections {
+		if source == "chatgpt" || source == "google_search" {
+			continue
+		}
+		runtimes[source] = &validatedSourceRuntime{qc: qc, collection: name, baseURL: config.url, model: config.model, source: source}
+	}
+	googleRuntime := &validatedSourceRuntime{
 		qc:         qc,
 		collection: googleCollection,
 		baseURL:    googleURL,
 		model:      googleModel,
 	}
+	runtimes["google_search"] = googleRuntime
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || (r.URL.Path != "/" && r.URL.Path != "/index.html") {
 			http.NotFound(w, r)
@@ -89,14 +106,35 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		statusCollection := collection
-		if r.URL.Query().Get("source") == "google_search" {
-			statusCollection = googleCollection
-		}
-		count, err := qc.Count(r.Context(), statusCollection)
+		source := r.URL.Query().Get("source")
+		sources, err := searchSources(&model.Filters{Source: []string{source}})
 		if err != nil {
-			http.Error(w, "index unavailable", http.StatusServiceUnavailable)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		var count int64
+		for _, source := range sources {
+			name := collections[source]
+			if name == "" {
+				if runtimes[source] != nil {
+					http.Error(w, source+" collection not configured", http.StatusBadRequest)
+					return
+				}
+				name = collection
+			}
+			n, err := qc.Count(r.Context(), name)
+			if err != nil {
+				http.Error(w, source+" index unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			count += int64(n)
+		}
+		statusCollection := collections[sources[0]]
+		if statusCollection == "" {
+			statusCollection = collection
+		}
+		if len(sources) > 1 {
+			statusCollection = "all"
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "ok", "collection": statusCollection, "points": count})
@@ -133,46 +171,74 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 			req.Limit = 20
 		}
 
-		searchCollection := collection
-		queryEmbedder := emb
-		isGoogle, routeErr := googleRoute(req.Filters)
-		if routeErr != nil {
-			http.Error(w, routeErr.Error(), http.StatusBadRequest)
+		sources, err := searchSources(req.Filters)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if isGoogle {
-			if googleCollection == "" || googleCollection == collection {
-				http.Error(w, "Google requires a separate collection", http.StatusBadRequest)
+		if req.Limit > 1000 {
+			http.Error(w, "limit must be <= 1000", http.StatusBadRequest)
+			return
+		}
+		resp := model.SearchResponse{Results: []model.SearchResult{}}
+		for _, source := range sources {
+			searchCollection := collections[source]
+			if searchCollection == "" && runtimes[source] == nil {
+				searchCollection = collection
+			}
+			queryEmbedder := emb
+			if runtimes[source] != nil {
+				for other, name := range collections {
+					if name == searchCollection && other != source {
+						http.Error(w, "sources require separate collections", http.StatusBadRequest)
+						return
+					}
+				}
+				if searchCollection == "" {
+					http.Error(w, source+" collection not configured", http.StatusBadRequest)
+					return
+				}
+				sourceEmb, err := runtimes[source].embedder(r.Context())
+				if err != nil {
+					http.Error(w, source+": "+err.Error(), http.StatusServiceUnavailable)
+					return
+				}
+				queryEmbedder = sourceEmb
+			}
+			vecs, err := queryEmbedder.Embed(r.Context(), []string{req.Query})
+			if err != nil || len(vecs) != 1 {
+				http.Error(w, source+" embedding error", http.StatusServiceUnavailable)
 				return
 			}
-			googleEmb, err := googleRuntime.embedder(r.Context())
+			filters := model.Filters{}
+			if req.Filters != nil {
+				filters = *req.Filters
+			}
+			filters.Source = []string{source}
+			out, err := qc.Search(r.Context(), searchCollection, qdrant.SearchRequest{Vector: vecs[0], Limit: req.Limit, WithPayload: true, Filter: buildQdrantFilter(&filters)})
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				http.Error(w, source+" search error", http.StatusServiceUnavailable)
 				return
 			}
-			searchCollection = googleCollection
-			queryEmbedder = googleEmb
+			for rank, hit := range out.Result {
+				result := toSearchResult(hit)
+				if len(sources) > 1 {
+					if result.Metadata == nil {
+						result.Metadata = map[string]any{}
+					}
+					result.Metadata["source_score"] = result.Score
+					result.Metadata["source_rank"] = rank + 1
+					result.Score = 1.0 / float64(60+rank+1)
+				}
+				resp.Results = append(resp.Results, result)
+			}
 		}
-		vecs, err := queryEmbedder.Embed(r.Context(), []string{req.Query})
-		if err != nil {
-			http.Error(w, "embedding error", http.StatusInternalServerError)
-			return
+		if len(sources) > 1 {
+			resp.Ranking = "reciprocal_rank_k60"
+			sort.SliceStable(resp.Results, func(i, j int) bool { return resp.Results[i].Score > resp.Results[j].Score })
 		}
-
-		out, err := qc.Search(r.Context(), searchCollection, qdrant.SearchRequest{
-			Vector:      vecs[0],
-			Limit:       req.Limit,
-			WithPayload: true,
-			Filter:      buildQdrantFilter(req.Filters),
-		})
-		if err != nil {
-			http.Error(w, "search error", http.StatusInternalServerError)
-			return
-		}
-
-		resp := model.SearchResponse{Results: make([]model.SearchResult, 0, len(out.Result))}
-		for _, hit := range out.Result {
-			resp.Results = append(resp.Results, toSearchResult(hit))
+		if len(resp.Results) > req.Limit {
+			resp.Results = resp.Results[:req.Limit]
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -232,7 +298,10 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 	return mux
 }
 
-type validatedGoogleRuntime struct {
+type appleConfig struct{ notes, voice, url, model string }
+
+type validatedSourceRuntime struct {
+	source     string
 	mu         sync.Mutex
 	qc         *qdrant.Client
 	collection string
@@ -241,7 +310,7 @@ type validatedGoogleRuntime struct {
 	cached     *googlesearch.PinnedEmbedder
 }
 
-func (r *validatedGoogleRuntime) embedder(ctx context.Context) (*googlesearch.PinnedEmbedder, error) {
+func (r *validatedSourceRuntime) embedder(ctx context.Context) (*googlesearch.PinnedEmbedder, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.cached != nil {
@@ -251,7 +320,11 @@ func (r *validatedGoogleRuntime) embedder(ctx context.Context) (*googlesearch.Pi
 	if err != nil {
 		return nil, err
 	}
-	if err := r.qc.ValidateEmbedding(ctx, r.collection, emb.EmbeddingIdentity(), emb.Dim()); err != nil {
+	source := r.source
+	if source == "" {
+		source = "google_search"
+	}
+	if err := r.qc.ValidateSourceEmbedding(ctx, r.collection, emb.EmbeddingIdentity(), emb.Dim(), source); err != nil {
 		return nil, err
 	}
 	r.cached = emb
@@ -438,23 +511,4 @@ func defaultAddr() string {
 		return ":" + port
 	}
 	return envDefault("ADDR", "127.0.0.1:8080")
-}
-
-// Existing source/default routing stays on the configured ChatGPT collection.
-func googleRoute(f *model.Filters) (bool, error) {
-	if f == nil {
-		return false, nil
-	}
-	for _, source := range f.Source {
-		if source == "google_search" {
-			if len(f.Source) != 1 {
-				return false, fmt.Errorf("select Google Search alone; cross-collection ranking is unsupported")
-			}
-			if f.Author != "" || f.ThreadID != "" {
-				return false, fmt.Errorf("speaker and conversation filters apply only to ChatGPT")
-			}
-			return true, nil
-		}
-	}
-	return false, nil
 }

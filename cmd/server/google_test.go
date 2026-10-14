@@ -81,7 +81,7 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 		t.Fatalf("validated google collection %d times, want 1", scrollCalls)
 	}
 	for _, body := range []string{
-		`{"query":"q","filters":{"source":["google_search","chatgpt"]}}`,
+		`{"query":"q","filters":{"source":["google_search","all"]}}`,
 		`{"query":"q","filters":{"source":["google_search"],"author":"user"}}`,
 		`{"query":"q","filters":{"source":["google_search"],"date":{"from":"2026-02-01","to":"2026-01-01"}}}`,
 	} {

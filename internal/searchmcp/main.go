@@ -109,11 +109,11 @@ func (h Handler) handle(ctx context.Context, req rpcRequest) (map[string]any, er
 			"tools": []map[string]any{
 				{
 					"name":        toolName,
-					"description": "Search indexed ChatGPT conversations or Google Search history; dates are inclusive UTC days",
+					"description": "Search indexed ChatGPT, Google Search, Apple Notes, or Voice Memos; all merges source ranks; dates are inclusive UTC days",
 					"inputSchema": map[string]any{
 						"type": "object",
 						"properties": map[string]any{
-							"source":    map[string]any{"type": "string", "enum": []string{"chatgpt", "google_search"}, "default": "chatgpt"},
+							"source":    map[string]any{"type": "string", "enum": []string{"chatgpt", "google_search", "apple_notes", "voicememo", "all"}, "default": "chatgpt"},
 							"query":     map[string]any{"type": "string"},
 							"limit":     map[string]any{"type": "number"},
 							"author":    map[string]any{"type": "string"},
@@ -161,10 +161,10 @@ func (h Handler) handle(ctx context.Context, req rpcRequest) (map[string]any, er
 		if source == "" {
 			source = "chatgpt"
 		}
-		if source != "chatgpt" && source != "google_search" {
-			return nil, fmt.Errorf("source must be chatgpt or google_search")
+		if source != "chatgpt" && source != "google_search" && source != "apple_notes" && source != "voicememo" && source != "all" {
+			return nil, fmt.Errorf("unsupported source")
 		}
-		if source == "google_search" && (params.Arguments.Author != "" || params.Arguments.ThreadID != "") {
+		if source != "chatgpt" && (params.Arguments.Author != "" || params.Arguments.ThreadID != "") {
 			return nil, fmt.Errorf("speaker and conversation filters apply only to ChatGPT")
 		}
 		searchReq.Filters.Source = []string{source}

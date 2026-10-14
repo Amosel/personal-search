@@ -1,6 +1,6 @@
 # Personal Search
 
-Personal Search lets you search your exported ChatGPT conversations and Google Search history by meaning. Describe what you remember—an idea, a question, or a topic—and retrieve relevant messages or past searches, even when you cannot recall the exact words.
+Personal Search lets you search your exported ChatGPT conversations, Google Search history, Apple Notes, and Voice Memo transcripts by meaning. Describe what you remember—an idea, a question, or a topic—and retrieve relevant messages or past searches, even when you cannot recall the exact words.
 
 For example, a query such as `how I planned to organize my notes` can help you find an earlier discussion about a filing system. Results include the stored text, timestamp, source, similarity score, and metadata so you can inspect the original context.
 
@@ -11,11 +11,13 @@ The project is a Go application with a browser UI, command-line search, an HTTP 
 | Source | Accepted input | What a result represents |
 | --- | --- | --- |
 | ChatGPT | `conversations.json`, or a ChatGPT export ZIP containing it | One message, with speaker, conversation ID, and title when available |
+| Apple Notes | JSON pages from `sweetrb/apple-notes-mcp` | One note, with native ID, modification date and provenance |
+| Voice Memos | Existing VoiceMemo robot SQLite DB | One current successful transcript, with original recording time and audio locator |
 | Google Search | Google Takeout ZIP containing `Takeout/My Activity/Search/MyActivity.html`, the HTML file itself, or a normalized JSON archive from an external crawler | One Search activity record, with account, original URL when present, and import provenance |
 
 In the browser, select a source and optionally filter by date. ChatGPT also supports speaker and conversation filters, and you can expand a matching message to read the indexed conversation in chronological order. Google results expose their stored metadata and provenance. Date filters include both boundary dates and use UTC days.
 
-ChatGPT and Google Search use separate Qdrant collections. Each search selects one source; results from the two collections are not combined into a shared ranking. The [`chatgpt-conversation-search`](chatgpt-conversation-search) wrapper searches ChatGPT; Google has a separate CLI and is also available through the UI, API, and MCP.
+Sources use separate Qdrant collections. Select one source or **All sources**; merged results interleave source ranks without comparing incompatible embedding scores. Every requested source must have been imported. See [Apple sources and merged search](docs/apple-sources.md) for import commands, subset searches, and coverage limits. The [`chatgpt-conversation-search`](chatgpt-conversation-search) wrapper searches ChatGPT; Google has a separate CLI and is also available through the UI, API, and MCP.
 
 ## How it works
 
@@ -114,6 +116,10 @@ go run ./cmd/search_google_search --server http://127.0.0.1:18080 \
 
 See [Google Search integration](docs/google-search.md) for archive contracts, model compatibility, custom configuration, and verification status, and [Takeout formats](docs/google-takeout-shapes.md) for supported export shapes.
 
+## Add Apple Notes and Voice Memos
+
+See [Apple sources and merged search](docs/apple-sources.md). Notes accepts paginated JSON from `sweetrb/apple-notes-mcp`; Voice Memos reads successful current transcripts from the existing `$voicememo` robot SQLite database. Both provide `--dry-run` and preserve native IDs and provenance.
+
 ## Use the API or an assistant
 
 The HTTP server exposes:
@@ -144,7 +150,7 @@ To expose search to an MCP client, configure it to launch this command from the 
 go run ./cmd/mcp_search --server http://127.0.0.1:18080
 ```
 
-The stdio server exposes **`search_documents`**, with arguments `query`, `source` (`chatgpt` or `google_search`, defaulting to ChatGPT), `limit`, `from`, `to`, and ChatGPT-only `author` and `thread_id`. `make mcp`, `make chatgpt-mcp`, and `cmd/mcp_chatgpt_search` are existing entrypoints for the same implementation.
+The stdio server exposes **`search_documents`**, with arguments `query`, `source` (`chatgpt`, `google_search`, `apple_notes`, `voicememo`, or `all`, defaulting to ChatGPT), `limit`, `from`, `to`, and ChatGPT-only `author` and `thread_id`. `make mcp`, `make chatgpt-mcp`, and `cmd/mcp_chatgpt_search` are existing entrypoints for the same implementation.
 
 ## Configuration and indexing limits
 

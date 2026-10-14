@@ -1,0 +1,82 @@
+package applearchive
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os/exec"
+	"personal-search/internal/embed"
+	"personal-search/internal/model"
+	"personal-search/internal/qdrant"
+	"strings"
+	"testing"
+)
+
+type identifiedFake struct{ embed.FakeEmbedder }
+
+func (e identifiedFake) EmbeddingIdentity() string { return "fixture-identity" }
+
+func TestRunUpsertsStableIDsAndGuardsCollections(t *testing.T) {
+	var writes [][]qdrant.Point
+	foreign := false
+	store := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			fmt.Fprint(w, `{"result":{"config":{"params":{"vectors":{"size":2,"distance":"Cosine"}}}}}`)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/scroll") {
+			if foreign {
+				fmt.Fprint(w, `{"result":{"points":[{"payload":{"source":"google_search","embedding_identity":"fixture-identity"}}]}}`)
+			} else {
+				fmt.Fprint(w, `{"result":{"points":[]}}`)
+			}
+			return
+		}
+		var body struct {
+			Points []qdrant.Point `json:"points"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		writes = append(writes, body.Points)
+		fmt.Fprint(w, `{"result":{"status":"completed"}}`)
+	}))
+	defer store.Close()
+	emb := &identifiedFake{embed.FakeEmbedder{DimVal: 2}}
+	docs := []model.Document{{ID: "stable-id", Source: "apple_notes", Type: "note", Timestamp: 1767225600000, Text: "first", Metadata: map[string]any{"native_id": "note-1", "title": "Original"}}}
+	run := func() (int, error) {
+		return Run(context.Background(), docs, "apple_notes", "notes", 8, emb, qdrant.New(store.URL))
+	}
+	if n, err := run(); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	docs[0].Text = "edited"
+	docs[0].Metadata["title"] = "Renamed"
+	if n, err := run(); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if len(writes) != 2 || writes[0][0].ID != writes[1][0].ID || writes[1][0].Payload["text"] != "edited" || writes[1][0].Payload["embedding_identity"] != "fixture-identity" {
+		t.Fatalf("writes=%+v", writes)
+	}
+	foreign = true
+	if n, err := run(); err == nil || n != 0 || len(writes) != 2 {
+		t.Fatalf("foreign collection accepted: n=%d err=%v", n, err)
+	}
+}
+
+func TestLoadExportThroughPython(t *testing.T) {
+	// Exercise the embedded script, not just its standalone unit tests.
+	_, err := Load(context.Background(), "apple_notes", t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "no JSON exports") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestSourceExporterFixtures(t *testing.T) {
+	out, err := exec.Command("python3", "-B", "-m", "unittest", "discover", "-s", ".", "-p", "*_test.py").CombinedOutput()
+	if err != nil {
+		t.Fatalf("Python exporter tests: %v\n%s", err, out)
+	}
+}

@@ -80,5 +80,6 @@ type SearchResult struct {
 }
 
 type SearchResponse struct {
+	Ranking string         `json:"ranking,omitempty"`
 	Results []SearchResult `json:"results"`
 }

@@ -94,7 +94,7 @@ func (s *capturingSearcher) Search(_ context.Context, r model.SearchRequest) (mo
 	return model.SearchResponse{Results: []model.SearchResult{}}, nil
 }
 func TestSourceAndDateForwarding(t *testing.T) {
-	for _, source := range []string{"", "google_search"} {
+	for _, source := range []string{"", "google_search", "apple_notes", "voicememo", "all"} {
 		s := &capturingSearcher{}
 		h := Handler{searcher: s}
 		_, err := h.handle(context.Background(), rpcRequest{Method: "tools/call", Params: mustJSON(map[string]any{"name": "search_documents", "arguments": map[string]any{"query": "query", "source": source, "from": "2026-01-01", "to": "2026-02-01"}})})

@@ -103,7 +103,7 @@
           <button class="search-button" id="search-button" type="submit">Search</button>
         </div>
         <div class="filters">
-          <label class="field">Source<select id="source"><option value="chatgpt">ChatGPT</option><option value="google_search">Google Search</option></select></label>
+          <label class="field">Source<select id="source"><option value="chatgpt">ChatGPT</option><option value="google_search">Google Search</option><option value="apple_notes">Apple Notes</option><option value="voicememo">Voice Memos</option><option value="all">All sources</option></select></label>
           <label class="field">From<input type="date" id="from" /></label>
           <label class="field">To<input type="date" id="to" /></label>
           <label class="field">Speaker<select id="author"><option value="">Anyone</option><option value="user">Me</option><option value="assistant">Assistant</option></select></label>
@@ -181,11 +181,11 @@
         const card = node('article', 'result');
         const main = node('div', 'result-main');
         const meta = node('div', 'meta');
-        const author = item.source === 'google_search' ? `Google Search · ${item.metadata?.account || ''}` : item.metadata?.author || 'unknown';
+        const author = item.source === 'google_search' ? `Google Search · ${item.metadata?.account || ''}` : item.metadata?.author || item.source;
         meta.append(node('span', `author ${author}`, author));
         meta.append(node('time', '', prettyDate(item.timestamp)));
         if (item.metadata?.title) meta.append(node('span', 'title', item.metadata.title));
-        meta.append(node('span', 'score', `Match ${(item.score * 100).toFixed(1)}%`));
+        meta.append(node('span', 'score', item.metadata?.source_rank ? `Source rank ${item.metadata.source_rank}` : `Similarity ${item.score.toFixed(3)}`));
         main.append(meta);
         appendMessage(main, item.text);
         const actions = node('div', 'result-actions');
@@ -221,13 +221,15 @@
           const searchInThread = node('button', 'text-button', 'Search this conversation');
           searchInThread.type = 'button';
           searchInThread.addEventListener('click', () => {
+            document.querySelector('#source').value = 'chatgpt';
+            document.querySelector('#source').dispatchEvent(new Event('change'));
             document.querySelector('#thread-id').value = threadID;
             form.requestSubmit();
             window.scrollTo({ top: 0, behavior: 'smooth' });
           });
           actions.append(searchInThread);
         }
-        if (item.source === 'google_search') {
+        if (item.source !== 'chatgpt') {
           const url = item.metadata?.url;
           if (url) {
             try {
@@ -305,9 +307,9 @@
         }
       });
       document.querySelector('#source').addEventListener('change', () => {
-        const google = document.querySelector('#source').value === 'google_search';
-        document.querySelector('#author').disabled = google;
-        document.querySelector('#thread-id').disabled = google;
+        const chatOnlyFiltersDisabled = document.querySelector('#source').value !== 'chatgpt';
+        document.querySelector('#author').disabled = chatOnlyFiltersDisabled;
+        document.querySelector('#thread-id').disabled = chatOnlyFiltersDisabled;
         resultsRoot.replaceChildren(); resultSection.hidden = true;
         updateStatus();
       });
