@@ -31,11 +31,7 @@ The source layer MUST NOT perform validation, filtering, or semantic decisions.
 
 ## 1) Run Qdrant locally
 
-The default local runtime is Apple `container`. The Makefile creates or reuses:
-
-* Container: `personal-search-qdrant`
-* Volume: `personal-search-qdrant-data:/qdrant/storage`
-* Ports: `6333`, `6334`
+The local runtime uses Docker Compose through the `socktainer` Docker context. See [local runtime setup](local-runtime.md) for installation and startup. The Makefile creates or reuses the external volume `personal-search-qdrant-data` and publishes ports `6333` and `6334` on loopback.
 
 Start:
 
@@ -43,13 +39,13 @@ Start:
 make qdrant-up
 ```
 
-Use Docker Compose instead with:
+Use another Docker context with:
 
 ```bash
-QDRANT_RUNTIME=docker make qdrant-up
+DOCKER_CONTEXT=desktop-linux make qdrant-up
 ```
 
-The Docker fallback still uses the committed `docker-compose.yml`.
+Every context uses the committed `docker-compose.yml`.
 
 ---
 
@@ -941,10 +937,10 @@ This is the tool surface your agent calls (your server implements it).
 make qdrant-up
 ```
 
-The default uses Apple `container`. To use Docker Compose instead, run:
+The default uses Docker Compose through Socktainer. To select another Docker backend, run:
 
 ```bash
-QDRANT_RUNTIME=docker make qdrant-up
+DOCKER_CONTEXT=desktop-linux make qdrant-up
 ```
 
 2. Ingest ChatGPT export

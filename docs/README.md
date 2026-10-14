@@ -19,6 +19,9 @@ Read in this order:
 7. [google-takeout-shapes.md](google-takeout-shapes.md)
    Primary-source export fields/formats; Takeout envelope and HTML limitations.
 
+8. [local-runtime.md](local-runtime.md)
+   Socktainer installation, Docker Compose lifecycle, and persistent database reuse.
+
 Reference/archival:
 - [PRD.md](/Users/amoselmaliah/dev/projects/personal-search/docs/PRD.md)
 - [implementation.md](/Users/amoselmaliah/dev/projects/personal-search/docs/implementation.md)

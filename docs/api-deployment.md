@@ -6,14 +6,14 @@ This is API-first hardening. The embedded UI is also protected by the token, but
 
 ## Runtime dependencies
 
-- Qdrant containing the indexed collections. Local development now defaults to Apple container Qdrant through `make qdrant-up`; Docker Qdrant is still available with `QDRANT_RUNTIME=docker make qdrant-up`.
+- Qdrant containing the indexed collections. Local development uses Docker Compose through Socktainer's Docker context; see [local runtime setup](local-runtime.md). `DOCKER_CONTEXT` selects another Docker backend.
 - An embedding service compatible with the collection. The imported Google Search collection uses `nomic-embed-text:latest` through Ollama, so the deployed API must reach an Ollama server with that same model digest.
 
 ## Container
 
 ```sh
-docker build -t personal-search-api .
-docker run --rm -p 8080:8080 \
+docker --context socktainer build -t personal-search-api .
+docker --context socktainer run --rm -p 8080:8080 \
   -e ADDR=:8080 \
   -e QDRANT_URL=http://host.docker.internal:6333 \
   -e EMBEDDER=ollama \
@@ -26,20 +26,21 @@ docker run --rm -p 8080:8080 \
   personal-search-api
 ```
 
-Or, with Docker Qdrant plus the API overlay:
+Or, with Qdrant plus the API overlay (create the external database volume once first):
 
 ```sh
-PERSONAL_SEARCH_API_TOKEN=change-me docker compose -f docker-compose.yml -f compose.api.yml up --build
+docker --context socktainer volume create personal-search-qdrant-data
+PERSONAL_SEARCH_API_TOKEN=change-me docker --context socktainer compose -f docker-compose.yml -f compose.api.yml up --build
 ```
 
-Only run the Docker Qdrant compose service when Apple container Qdrant is stopped, because both runtimes want ports `6333` and `6334`.
+Use the same Docker context for the volume and Compose commands. Only one database can bind host ports `6333` and `6334` at a time.
 
-To run only the API container while using Apple container Qdrant on the host:
+To run only the API container while using an existing Qdrant on the host:
 
 ```sh
 PERSONAL_SEARCH_API_TOKEN=change-me \
 QDRANT_URL=http://host.docker.internal:6333 \
-docker compose -f compose.api.yml up --build
+docker --context socktainer compose -f compose.api.yml up --build
 ```
 
 ## API smoke check

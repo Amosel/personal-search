@@ -31,7 +31,7 @@ With the default local setup, document text and queries are embedded by Ollama o
 
 ## Get started locally
 
-You need Go **1.23.3 or newer**, Make, `curl`, `jq`, a running Ollama service, and either Apple's `container` CLI or Docker with Compose. Run the following commands from the repository root.
+You need Go **1.23.3 or newer**, Make, `curl`, `jq`, a running Ollama service, and Docker CLI with Compose. On Apple Silicon macOS 26+, use [Socktainer](https://github.com/socktainer/socktainer) as the Docker backend. Run project commands from the repository root.
 
 ### 1. Prepare the services
 
@@ -41,18 +41,27 @@ Pull the default embedding model into Ollama:
 ollama pull nomic-embed-text:latest
 ```
 
-Start Qdrant using Apple's container runtime (the Makefile default). Its services must be running first:
+Install Socktainer (Homebrew also installs its compatible Container runtime):
 
 ```sh
-container system start
+brew install socktainer
+# If Docker CLI and Compose are not already installed:
+brew install docker docker-compose
+```
+
+Start Socktainer in a separate terminal and leave it running:
+
+```sh
+socktainer --volume-sync=fsync
+```
+
+Socktainer starts its backend and registers the `socktainer` Docker context. The Makefile selects that context explicitly, leaving your global Docker context unchanged. Start Qdrant with Compose:
+
+```sh
 make qdrant-up
 ```
 
-For Docker, use this instead:
-
-```sh
-QDRANT_RUNTIME=docker make qdrant-up
-```
+See [local runtime setup](docs/local-runtime.md) for Compose plugin installation, existing database reuse, and other Docker contexts.
 
 Check that Qdrant, Ollama, and the model are reachable:
 
@@ -158,8 +167,10 @@ The Make targets and wrapper use these defaults:
 
 | Setting | Default |
 | --- | --- |
-| `QDRANT_RUNTIME` | `container` (`docker` is also supported) |
+| `DOCKER_CONTEXT` | `socktainer` (override for another Docker backend) |
 | `QDRANT_URL` | `http://localhost:6333` |
+| `QDRANT_IMAGE` | `qdrant/qdrant:v1.19.2` |
+| `QDRANT_VOLUME_NAME` | `personal-search-qdrant-data` (external persistent volume) |
 | `CHATGPT_COLLECTION` | `chatgpt_messages` |
 | `CHATGPT_SERVER_ADDR` / `CHATGPT_SERVER_URL` | `127.0.0.1:18080` / `http://127.0.0.1:18080` |
 | `CHATGPT_EMBEDDER` | `ollama` |
