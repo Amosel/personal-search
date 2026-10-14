@@ -357,7 +357,8 @@ type IdentifiedEmbedder interface {
 	EmbeddingIdentity() string
 }
 
-// Run returns only the count acknowledged by Qdrant, including on partial failure.
+// Run returns only the count acknowledged in this run, including on partial
+// failure. This is not a count of newly created points or disk durability.
 func Run(ctx context.Context, docs []model.Document, collection string, batch int, emb IdentifiedEmbedder, store Store) (int, error) {
 	if batch <= 0 || collection == "" || emb == nil || store == nil {
 		return 0, fmt.Errorf("collection, positive batch, embedder and store required")
@@ -368,17 +369,30 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 	if emb.EmbeddingIdentity() == "" {
 		return 0, fmt.Errorf("embedding identity required")
 	}
-	if err := store.EnsureCollection(ctx, collection, emb.Dim()); err != nil {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("before ensure collection: %w", err)
+	}
+	dim := emb.Dim()
+	if dim <= 0 {
+		return 0, fmt.Errorf("embedding dimension must be > 0, got %d", dim)
+	}
+	if err := store.EnsureCollection(ctx, collection, dim); err != nil {
 		return 0, err
 	}
-	if err := store.ValidateEmbedding(ctx, collection, emb.EmbeddingIdentity(), emb.Dim()); err != nil {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("before validate embedding: %w", err)
+	}
+	if err := store.ValidateEmbedding(ctx, collection, emb.EmbeddingIdentity(), dim); err != nil {
 		return 0, err
 	}
-	completed := 0
+	acknowledged := 0
 	for i := 0; i < len(docs); i += batch {
 		end := i + batch
 		if end > len(docs) {
 			end = len(docs)
+		}
+		if err := ctx.Err(); err != nil {
+			return acknowledged, fmt.Errorf("before embed batch [%d:%d]: %w", i, end, err)
 		}
 		texts := make([]string, end-i)
 		for j := i; j < end; j++ {
@@ -386,18 +400,20 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 		}
 		vectors, err := emb.Embed(ctx, texts)
 		if err != nil {
-			return completed, fmt.Errorf("batch [%d:%d]: %w", i, end, err)
+			return acknowledged, fmt.Errorf("embed batch [%d:%d]: %w", i, end, err)
 		}
 		if len(vectors) != len(texts) {
-			return completed, fmt.Errorf("embedding count mismatch")
+			return acknowledged, fmt.Errorf("embed batch [%d:%d]: vector count got=%d want=%d", i, end, len(vectors), len(texts))
+		}
+		for j, vector := range vectors {
+			if len(vector) != dim {
+				return acknowledged, fmt.Errorf("embed batch [%d:%d]: vector %d dimension got=%d want=%d", i, end, j, len(vector), dim)
+			}
 		}
 		points := make([]qdrant.Point, len(texts))
 		for j := i; j < end; j++ {
 			d := docs[j]
 			vector := vectors[j-i]
-			if len(vector) != emb.Dim() {
-				return completed, fmt.Errorf("embedding dimension mismatch")
-			}
 			payload := map[string]any{}
 			for k, v := range d.Metadata {
 				payload[k] = v
@@ -410,12 +426,18 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 			payload["timestamp_unix_ms"] = d.Timestamp
 			points[j-i] = qdrant.Point{ID: PointID(d.ID), Vector: vector, Payload: payload}
 		}
-		if err := store.Upsert(ctx, collection, points); err != nil {
-			return completed, fmt.Errorf("upsert batch [%d:%d]: completion unknown; may have been applied: %w", i, end, err)
+		if err := ctx.Err(); err != nil {
+			return acknowledged, fmt.Errorf("before upsert batch [%d:%d]: %w", i, end, err)
 		}
-		completed += len(points)
+		if err := store.Upsert(ctx, collection, points); err != nil {
+			return acknowledged, fmt.Errorf("upsert batch [%d:%d]: completion unknown; may have been applied: %w", i, end, err)
+		}
+		acknowledged += len(points)
 	}
-	return completed, nil
+	if err := ctx.Err(); err != nil {
+		return acknowledged, fmt.Errorf("after acknowledged upserts: %w", err)
+	}
+	return acknowledged, nil
 }
 
 // Match the crawler's Python ensure_ascii=False canonical JSON, including U+2028.

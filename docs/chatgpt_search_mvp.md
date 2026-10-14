@@ -38,6 +38,41 @@ go run ./cmd/ingest_chatgpt --export /absolute/path/to/conversations.json --repo
 
 The ingest CLI and Make target write `./ingest_report.json` relative to their working directory by default. The wrapper writes it in the directory where you invoked the wrapper. Set `--report-out` or `REPORT_OUT` to choose another writable destination.
 
+Reports use `schema_version: 1` and retain the existing classification `summary`
+and `entries`. The separate `progress` fields describe this run:
+
+| Field | Meaning |
+| --- | --- |
+| `classified` | Canonical documents created during source classification |
+| `selected` | Documents chosen after `--max_docs` |
+| `acknowledged` | Documents in batches whose upsert returned success |
+| `uncertain` | Documents in an upsert batch that returned an error; it may have been applied |
+| `not_attempted` | Selected documents never sent to upsert, including embedding failures |
+| `skipped` | Source records skipped during classification |
+| `excluded_by_max_docs` | Classified documents excluded by the import cap, separate from source skips |
+
+`selected = acknowledged + uncertain + not_attempted`. `Result.Documents` is
+the acknowledged count for this run, including on failure; it is not the number
+of new unique points or a guarantee of disk durability. An `uncertain_batch`
+and a batch-scoped `failure.batch` use zero-based selected-document indexes
+with an exclusive end. Embedding count/dimension errors stop before upsert.
+Cancellation before an upsert leaves the batch not attempted; cancellation
+or another error returned by an invoked upsert leaves it uncertain. A successful
+upsert is counted before checking subsequent cancellation.
+
+The CLI prints classification and ingestion progress on failure and exits
+nonzero. Reports are written privately (0600) via a same-directory temporary
+file, file sync, close and atomic rename. If report writing fails, the returned
+report is failed and retains acknowledged progress; operation and report-write
+errors are both inspectable. A previous report on disk may remain and does not
+describe the failed current write. Older unversioned reports remain readable,
+but their historical acknowledged counts cannot be reconstructed.
+
+After a partial failure, retry the full unchanged export against the same
+collection with the same embedding model. Stable IDs update the same logical
+records, including any uncertain batch that was applied. This is a full retry,
+not automatic resume or transactional rollback; no compensating deletes occur.
+
 Run server:
 
 ```bash

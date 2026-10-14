@@ -1,6 +1,9 @@
 package chatgpt
 
 import (
+	"encoding/json"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -66,6 +69,59 @@ func TestToDocumentsWithReport_PreservesBehaviorAndTracksOutcomes(t *testing.T) 
 	}
 	if report.Summary.ByReason[string(ReasonDocumentCreated)] != 1 {
 		t.Fatalf("unexpected reason counts: %+v", report.Summary.ByReason)
+	}
+	if report.Progress.Classified != 1 || report.Progress.Skipped != 4 || report.Progress.Selected != 0 {
+		t.Fatalf("classification changed ingestion selection: %+v", report.Progress)
+	}
+}
+
+func TestIngestReportWriteReplacesPrivatelyAndAtomically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.json")
+	oldData := []byte(`{"status":"old"}`)
+	if err := os.WriteFile(path, oldData, 0644); err != nil {
+		t.Fatal(err)
+	}
+	oldFile, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldFile.Close()
+	report := NewIngestReport("synthetic.json")
+	report.MarkCompleted()
+	if err := report.Write(path); err != nil {
+		t.Fatal(err)
+	}
+	// An already-open reader retains the old complete file after replacement.
+	retained, err := io.ReadAll(oldFile)
+	if err != nil || string(retained) != string(oldData) {
+		t.Fatalf("old file was modified in place: data=%q err=%v", retained, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved IngestReport
+	if err := json.Unmarshal(data, &saved); err != nil || saved.Status != "completed" || saved.SchemaVersion != 1 {
+		t.Fatalf("invalid published report: data=%s err=%v", data, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("report permissions are not private: info=%v err=%v", info, err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("temporary report leaked: entries=%v err=%v", entries, err)
+	}
+}
+
+func TestLegacyIngestReportRemainsReadable(t *testing.T) {
+	var report IngestReport
+	data := []byte(`{"source":"chatgpt","status":"completed","summary":{"total_records":3,"documents_created":2,"skipped":1,"failed":0,"by_reason":{"document_created":2}},"entries":[]}`)
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.SchemaVersion != 0 || report.Summary.DocumentsCreated != 2 || report.Summary.Skipped != 1 || report.Progress.Acknowledged != 0 {
+		t.Fatalf("legacy report was reinterpreted: %+v", report)
 	}
 }
 

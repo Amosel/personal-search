@@ -23,6 +23,14 @@ Each point includes the Ollama model-content digest and embedding preprocessing 
 
 Upserts require wait=true and status=completed. On failure, acknowledged counts include only prior confirmed batches; an unconfirmed batch may have reached Qdrant. Errors identify the batch range, zero-based, exclusive upper bound. Rerun safely with the same archive/model. CLI exits nonzero on failure; model initialization failures report zero acknowledged. Validation failures happen before indexing.
 
+`Run` retains its `(int, error)` return shape; the integer is the acknowledged
+count for that run, with the same meaning as ChatGPT's `Result.Documents`.
+Embedding errors or invalid vector counts/dimensions leave the batch not
+attempted. An error from an invoked upsert leaves completion uncertain, while
+a successful upsert is counted even if the context was canceled during the
+call. Cancellation then stops further work. Full retries use the same IDs;
+there is no automatic resume, transactional rollback or compensating deletion.
+
 ## UI, HTTP and MCP
 
 Run the existing server using the existing ChatGPT configuration. For example, if ChatGPT was indexed with local nomic:
