@@ -59,11 +59,19 @@ func main() {
 		fatal(fmt.Sprintf("ensure collection: %v", err))
 	}
 
-	handler := requireAPIToken(newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel, appleConfig{*notesCollection, *voiceCollection, *appleURL, *appleModel}), *apiToken)
+	handler := secureResponseHeaders(requireAPIToken(newMux(qc, emb, *collection, *googleCollection, *googleURL, *googleModel, appleConfig{*notesCollection, *voiceCollection, *appleURL, *appleModel}), *apiToken))
 
 	if err := http.ListenAndServe(*addr, handler); err != nil {
 		fatal(err.Error())
 	}
+}
+
+func secureResponseHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection, googleURL, googleModel string, configs ...appleConfig) *http.ServeMux {

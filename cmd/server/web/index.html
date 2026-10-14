@@ -4,11 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light" />
+    <meta name="referrer" content="no-referrer" />
     <link rel="icon" href="data:," />
     <title>Personal Search</title>
     <style>
       :root {
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
         color: #20231f;
         background: #f5f4ef;
         font-synthesis: none;
@@ -16,311 +24,2025 @@
         --line: #dedfd7;
         --green: #315c47;
         --paper: #fffefa;
+        --soft: #faf9f4;
+        --focus: #897438;
       }
-      * { box-sizing: border-box; }
-      body { margin: 0; min-height: 100vh; }
-      header { border-bottom: 1px solid var(--line); background: #fbfaf6; }
-      .topbar, main { width: min(960px, calc(100% - 36px)); margin: auto; }
-      .topbar { min-height: 68px; display: flex; align-items: center; justify-content: space-between; }
-      .brand { display: flex; align-items: center; gap: 11px; font-weight: 650; letter-spacing: -.02em; }
-      .mark { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: white; background: var(--green); font-size: 18px; }
-      .index-state { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
-      .dot { width: 8px; height: 8px; border-radius: 50%; background: #a5aa9f; }
-      .dot.ready { background: #43855d; }
-      main { padding: 54px 0 80px; }
-      .intro { margin-bottom: 25px; }
-      h1 { margin: 0 0 9px; font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 6vw, 48px); font-weight: 500; letter-spacing: -.04em; }
-      .intro p { margin: 0; color: var(--muted); font-size: 15px; }
-      .search-box { padding: 12px; border: 1px solid #d5d8ce; border-radius: 14px; background: var(--paper); box-shadow: 0 8px 24px #28362a0c; }
-      .query-row { display: flex; gap: 10px; }
-      textarea { flex: 1; min-width: 0; min-height: 48px; max-height: 160px; resize: vertical; border: 0; outline: 0; padding: 13px 12px; background: transparent; color: inherit; font: inherit; font-size: 16px; }
-      textarea::placeholder { color: #92968e; }
-      button, select, input { font: inherit; }
-      button { cursor: pointer; }
-      .search-button { align-self: stretch; padding: 0 22px; border: 0; border-radius: 10px; background: var(--green); color: white; font-weight: 600; }
-      .search-button:hover { background: #254b38; }
-      .search-button:disabled { cursor: wait; opacity: .65; }
-      .filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 10px 8px 2px; border-top: 1px solid #eeeee8; }
-      .field { display: grid; gap: 5px; color: var(--muted); font-size: 11px; }
-      .field input, .field select { height: 33px; min-width: 125px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: #33382f; font-size: 13px; }
-      .field.conversation { flex: 1 1 190px; }
-      .field.conversation input { min-width: 190px; }
-      .field.limit select { min-width: 72px; }
-      .hint { margin-left: auto; padding: 0 2px 9px; color: #898e85; font-size: 11px; }
-      .notice { min-height: 44px; padding: 16px 2px 10px; color: var(--muted); font-size: 13px; }
-      .notice.error { color: #a23e31; }
-      .result-head { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 0 12px; }
-      .result-head h2 { margin: 0; font-size: 14px; font-weight: 650; }
-      .result-head span { color: var(--muted); font-size: 12px; }
-      .results { display: grid; gap: 11px; }
-      .result { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
-      .result-main { padding: 17px 18px 14px; }
-      .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 11px; color: var(--muted); font-size: 11px; }
-      .author { padding: 3px 7px; border-radius: 99px; background: #e9eee8; color: #375b46; text-transform: capitalize; font-weight: 600; }
-      .author.assistant { background: #efeee8; color: #686452; }
-      .title { color: #444b41; font-weight: 600; }
-      .score { margin-left: auto; font-variant-numeric: tabular-nums; }
-      .message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.62; }
-      .full-message { margin-top: 11px; color: var(--green); font-size: 12px; cursor: pointer; }
-      .full-message .message { margin-top: 8px; color: #20231f; cursor: text; }
-      .result-actions { display: flex; align-items: center; gap: 16px; padding: 0 18px 14px; }
-      .text-button { border: 0; padding: 0; background: none; color: var(--green); font-size: 12px; font-weight: 600; }
-      .text-button:hover { text-decoration: underline; }
-      .thread { display: grid; gap: 0; border-top: 1px solid var(--line); background: #faf9f4; }
-      .thread-entry { padding: 13px 18px; border-bottom: 1px solid #e9e9e1; }
-      .thread-entry:last-child { border-bottom: 0; }
-      .thread-entry .message { font-size: 13px; }
-      .empty { padding: 32px; border: 1px dashed #d4d7cd; border-radius: 12px; color: var(--muted); text-align: center; font-size: 13px; }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+      }
+      button,
+      select,
+      input,
+      textarea {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid #897438;
+        outline-offset: 2px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        background: #fbfaf6;
+      }
+      .topbar {
+        width: min(1500px, calc(100% - 40px));
+        min-height: 62px;
+        margin: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .mark {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        color: #fff;
+        background: var(--green);
+        font-size: 18px;
+      }
+      .index-state {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #a5aa9f;
+      }
+      .dot.ready {
+        background: #43855d;
+      }
+      .dot.partial {
+        background: #bc892c;
+      }
+      main {
+        width: min(1500px, calc(100% - 40px));
+        margin: auto;
+        padding: 27px 0 45px;
+      }
+      .intro {
+        margin-bottom: 18px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(28px, 4vw, 40px);
+        font-weight: 500;
+        letter-spacing: -0.04em;
+      }
+      .intro p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .search-box {
+        padding: 10px;
+        border: 1px solid #d5d8ce;
+        border-radius: 14px;
+        background: var(--paper);
+        box-shadow: 0 8px 24px #28362a0c;
+      }
+      .query-row {
+        display: flex;
+        gap: 10px;
+      }
+      .query {
+        flex: 1;
+        min-width: 0;
+        min-height: 48px;
+        max-height: 150px;
+        resize: vertical;
+        border: 0;
+        border-radius: 9px;
+        padding: 12px;
+        background: transparent;
+        color: inherit;
+        font-size: 16px;
+      }
+      .query::placeholder {
+        color: #92968e;
+      }
+      .search-button {
+        align-self: stretch;
+        padding: 0 22px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--green);
+        color: #fff;
+        font-weight: 600;
+      }
+      .search-button:hover {
+        background: #254b38;
+      }
+      .search-button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      .filter-row {
+        display: flex;
+        align-items: end;
+        flex-wrap: wrap;
+        gap: 11px;
+        padding: 9px 7px 2px;
+        border-top: 1px solid #eeeee8;
+      }
+      .field {
+        display: grid;
+        gap: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .field input,
+      .field select {
+        height: 33px;
+        min-width: 128px;
+        padding: 0 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: #33382f;
+        font-size: 13px;
+      }
+      .speaker {
+        min-width: 116px;
+      }
+      .source-set {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+      .source-set legend {
+        float: left;
+        margin: 0 8px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .source-choice {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #444b41;
+        font-size: 12px;
+      }
+      .source-choice input {
+        accent-color: var(--green);
+      }
+      .source-choice.unavailable {
+        color: #92968e;
+      }
+      .source-state {
+        font-size: 10px;
+        color: #9a5945;
+      }
+      .advanced {
+        margin: 5px 7px 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .advanced summary {
+        width: max-content;
+        cursor: pointer;
+        color: var(--green);
+      }
+      .advanced-fields {
+        display: flex;
+        gap: 11px;
+        flex-wrap: wrap;
+        padding: 10px 0 1px;
+      }
+      .field.conversation {
+        flex: 1 1 200px;
+      }
+      .field.conversation input {
+        min-width: 200px;
+      }
+      .field.limit select {
+        min-width: 70px;
+      }
+      .presets {
+        display: flex;
+        align-items: end;
+        gap: 5px;
+      }
+      .chip-button,
+      .clear-button,
+      .text-button {
+        border: 1px solid transparent;
+        border-radius: 7px;
+        padding: 6px 9px;
+        background: transparent;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .chip-button:hover,
+      .clear-button:hover,
+      .text-button:hover {
+        background: #e9eee8;
+      }
+      .notice {
+        min-height: 35px;
+        padding: 10px 2px 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .notice.error {
+        color: #a23e31;
+      }
+      .notice.updating {
+        color: #8b6825;
+      }
+      .active-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 2px 0 11px;
+      }
+      .filter-chip {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 8px;
+        border: 1px solid #d6ded4;
+        border-radius: 99px;
+        background: #edf1eb;
+        color: #375b46;
+        font-size: 11px;
+      }
+      .filter-chip button {
+        border: 0;
+        background: none;
+        color: inherit;
+        font-size: 14px;
+        line-height: 1;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(340px, 0.78fr) minmax(0, 1.22fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .result-column,
+      .reading-pane {
+        min-width: 0;
+      }
+      .result-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin: 7px 0 9px;
+      }
+      .result-head h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .result-head span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .results {
+        display: grid;
+        gap: 8px;
+        max-height: calc(100vh - 320px);
+        min-height: 120px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding: 1px 5px 12px 1px;
+        scrollbar-gutter: stable;
+      }
+      .result {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--paper);
+      }
+      .result.selected {
+        border-color: #688871;
+        box-shadow: 0 0 0 1px #688871;
+      }
+      .result-main {
+        padding: 12px 13px 8px;
+      }
+      .result-title {
+        display: block;
+        width: 100%;
+        margin: 0 0 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #282d27;
+        text-align: left;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 17px;
+        line-height: 1.28;
+        font-weight: 600;
+      }
+      .result-title:hover {
+        color: var(--green);
+        text-decoration: underline;
+      }
+      .excerpt {
+        margin: 0;
+        color: #353a33;
+        font-size: 13px;
+        line-height: 1.52;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .excerpt mark {
+        background: #f4e7a9;
+        color: inherit;
+        border-radius: 2px;
+      }
+      .excerpt.expanded {
+        display: block;
+        max-height: 38vh;
+        overflow: auto;
+      }
+      .expand-excerpt {
+        margin-top: 5px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--green);
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .result-meta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 5px 8px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .source-label {
+        padding: 2px 6px;
+        border-radius: 99px;
+        background: #e9eee8;
+        color: #375b46;
+        font-weight: 600;
+      }
+      .result-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 3px;
+        padding: 0 10px 9px;
+      }
+      .text-button {
+        padding: 5px 7px;
+      }
+      .details {
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .details summary {
+        width: max-content;
+        cursor: pointer;
+        color: var(--green);
+      }
+      .details pre,
+      .raw-text {
+        max-height: 240px;
+        overflow: auto;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        color: #32372f;
+        font:
+          12px/1.55 ui-monospace,
+          SFMono-Regular,
+          monospace;
+      }
+      .reading-pane {
+        position: sticky;
+        top: 12px;
+        min-height: 330px;
+        max-height: calc(100vh - 84px);
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+        scrollbar-gutter: stable;
+      }
+      .reader-placeholder {
+        display: grid;
+        place-content: center;
+        min-height: 330px;
+        padding: 30px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .reader-placeholder strong {
+        margin-bottom: 5px;
+        color: #454b42;
+      }
+      .reader-head {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #fffefaed;
+        backdrop-filter: blur(8px);
+      }
+      .reader-heading {
+        min-width: 0;
+      }
+      .reader-heading h2 {
+        overflow: hidden;
+        margin: 0;
+        color: #282d27;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .reader-subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .reader-controls {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .nav-button,
+      .reader-back {
+        padding: 6px 8px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--green);
+        font-size: 12px;
+      }
+      .nav-count {
+        min-width: 54px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 11px;
+      }
+      .reader-body {
+        padding: 14px 17px 28px;
+      }
+      .reader-context-notice {
+        margin: 0 0 10px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        background: #f1f0e8;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .reader-message {
+        padding: 12px 0;
+        border-bottom: 1px solid #ecece5;
+        scroll-margin: 76px;
+      }
+      .reader-message:last-child {
+        border-bottom: 0;
+      }
+      .reader-message.active {
+        box-shadow: 0 0 0 2px #93a58f;
+      }
+      .reader-message.matched {
+        margin: 0 -9px;
+        padding: 12px 9px;
+        border: 1px solid #d2c37c;
+        border-radius: 8px;
+        background: #fffbea;
+      }
+      .reader-message-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+      .reader-message-header .speaker {
+        color: #375b46;
+        font-weight: 650;
+      }
+      .reader-message p {
+        margin: 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font-size: 13px;
+        line-height: 1.63;
+      }
+      .reader-tabs {
+        display: flex;
+        gap: 5px;
+      }
+      .reader-tab {
+        padding: 5px 9px;
+        border: 1px solid var(--line);
+        border-radius: 99px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .reader-tab[aria-pressed="true"] {
+        border-color: #94a894;
+        background: #e9eee8;
+        color: #315c47;
+      }
+      .formatted h1,
+      .formatted h2,
+      .formatted h3 {
+        margin: 12px 0 6px;
+        font-family: inherit;
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+      .formatted p {
+        margin: 7px 0;
+        white-space: pre-wrap;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .formatted ul {
+        margin: 5px 0;
+        padding-left: 22px;
+      }
+      .formatted li {
+        margin: 3px 0;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .formatted pre {
+        overflow: auto;
+        margin: 8px 0;
+        padding: 10px;
+        border-radius: 7px;
+        background: #f1f0eb;
+        font:
+          12px/1.5 ui-monospace,
+          SFMono-Regular,
+          monospace;
+      }
+      .formatted code:not(pre code) {
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: #efeee8;
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          monospace;
+      }
+      .formatted a {
+        color: #315c47;
+        text-decoration: underline;
+      }
+      .reader-footer {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .no-results {
+        padding: 24px 14px;
+        border: 1px dashed #d4d7cd;
+        border-radius: 10px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 12px;
+      }
+      .tray-button {
+        position: relative;
+      }
+      .tray-count {
+        display: inline-grid;
+        place-items: center;
+        min-width: 17px;
+        height: 17px;
+        margin-left: 3px;
+        padding: 0 4px;
+        border-radius: 99px;
+        background: #e9eee8;
+        color: #315c47;
+        font-size: 10px;
+      }
+      .tray-list {
+        display: grid;
+        gap: 9px;
+        max-height: 55vh;
+        overflow: auto;
+        padding: 0;
+        list-style: none;
+      }
+      .tray-item {
+        padding: 9px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+      }
+      .tray-item p {
+        margin: 0 0 5px;
+        max-height: 66px;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .tray-item small {
+        color: var(--muted);
+      }
+      dialog {
+        width: min(560px, calc(100% - 28px));
+        max-height: 85vh;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper);
+        color: inherit;
+        box-shadow: 0 18px 60px #1e2b2040;
+      }
+      dialog::backdrop {
+        background: #16201877;
+      }
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .dialog-head h2 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+      }
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 7px;
+        margin-top: 13px;
+      }
+      .empty {
+        padding: 25px;
+        border: 1px dashed #d4d7cd;
+        border-radius: 10px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 12px;
+      }
+      .reader-back {
+        display: none;
+      }
+      .is-loading .result-head span {
+        color: #8b6825;
+      }
+      .has-results main {
+        padding-top: 18px;
+      }
+      .has-results .intro {
+        margin-bottom: 8px;
+      }
+      .has-results .intro h1 {
+        display: none;
+      }
+      .has-results .intro p {
+        display: none;
+      }
+      @media (max-width: 850px) {
+        main {
+          width: min(700px, calc(100% - 28px));
+        }
+        .topbar {
+          width: calc(100% - 28px);
+        }
+        .workspace {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+        }
+        .results {
+          max-height: 42vh;
+          min-height: 100px;
+        }
+        .reading-pane {
+          position: relative;
+          top: auto;
+          max-height: 55vh;
+        }
+        .reader-placeholder {
+          min-height: 160px;
+        }
+      }
       @media (max-width: 600px) {
-        main { padding-top: 36px; }
-        .query-row { display: grid; }
-        .search-button { min-height: 44px; }
-        .filters { gap: 9px; }
-        .field { flex: 1 1 calc(50% - 10px); }
-        .field input, .field select { width: 100%; }
-        .hint { width: 100%; margin: 0; padding: 2px 0 4px; }
-        .result-main { padding: 15px 14px 12px; }
-        .result-actions { padding: 0 14px 13px; }
-        .thread-entry { padding: 12px 14px; }
+        main {
+          padding-top: 20px;
+        }
+        .topbar {
+          min-height: 56px;
+        }
+        .index-state {
+          font-size: 10px;
+        }
+        .query-row {
+          display: grid;
+        }
+        .search-button {
+          min-height: 43px;
+        }
+        .filter-row {
+          gap: 8px;
+        }
+        .source-set {
+          flex: 1 1 100%;
+        }
+        .source-set legend {
+          width: 100%;
+          margin-bottom: 4px;
+        }
+        .field {
+          flex: 1 1 calc(50% - 8px);
+        }
+        .field input,
+        .field select {
+          width: 100%;
+          min-width: 0;
+        }
+        .presets {
+          flex: 1 1 100%;
+        }
+        .advanced-fields {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .advanced-fields .conversation {
+          grid-column: 1/-1;
+        }
+        .advanced-fields .conversation input {
+          min-width: 0;
+        }
+        .workspace {
+          display: block;
+        }
+        .reading-pane {
+          display: none;
+        }
+        .reading-open .reading-pane {
+          position: fixed;
+          z-index: 10;
+          inset: 0;
+          display: block;
+          width: 100%;
+          height: 100dvh;
+          max-height: none;
+          overflow: auto;
+          border: 0;
+          border-radius: 0;
+        }
+        .reading-open .reader-back {
+          display: inline-block;
+        }
+        .reading-open .result-column,
+        .reading-open .search-box,
+        .reading-open .intro,
+        .reading-open .notice,
+        .reading-open .active-filters {
+          display: none;
+        }
+        .reader-head {
+          top: 0;
+          padding-top: max(11px, env(safe-area-inset-top));
+        }
+        .reader-body {
+          padding-bottom: calc(28px + env(safe-area-inset-bottom));
+        }
+        .results {
+          max-height: none;
+          overflow: visible;
+        }
+        .has-results main {
+          padding-top: 12px;
+        }
       }
     </style>
   </head>
   <body>
     <header>
       <div class="topbar">
-        <div class="brand"><span class="mark" aria-hidden="true">⌕</span> Personal Search</div>
-        <div class="index-state" aria-live="polite"><span class="dot" id="health-dot"></span><span id="index-state">Connecting to local index…</span></div>
+        <div class="brand">
+          <span class="mark" aria-hidden="true">⌕</span> Personal Search
+        </div>
+        <div class="index-state" aria-live="polite">
+          <span class="dot" id="health-dot"></span
+          ><span id="index-state">Checking sources…</span>
+        </div>
       </div>
     </header>
-    <main>
+    <main id="app">
       <section class="intro">
         <h1>Find what you remember.</h1>
-        <p>Search ChatGPT conversations or Google Search history by meaning. Date filters use UTC days.</p>
+        <p>
+          Search conversations, notes, voice transcripts, and past searches.
+          Dates and timestamps use UTC.
+        </p>
       </section>
       <form class="search-box" id="search-form">
         <div class="query-row">
-          <textarea id="query" aria-label="Search conversations" placeholder="What did I decide about…" required></textarea>
-          <button class="search-button" id="search-button" type="submit">Search</button>
+          <textarea
+            class="query"
+            id="query"
+            aria-label="Search your sources"
+            placeholder="What do you remember?"
+            required
+          ></textarea
+          ><button class="search-button" id="search-button" type="submit">
+            Search
+          </button>
         </div>
-        <div class="filters">
-          <label class="field">Source<select id="source"><option value="chatgpt">ChatGPT</option><option value="google_search">Google Search</option><option value="apple_notes">Apple Notes</option><option value="voicememo">Voice Memos</option><option value="all">All sources</option></select></label>
-          <label class="field">From<input type="date" id="from" /></label>
-          <label class="field">To<input type="date" id="to" /></label>
-          <label class="field">Speaker<select id="author"><option value="">Anyone</option><option value="user">Me</option><option value="assistant">Assistant</option></select></label>
-          <label class="field conversation">Conversation ID<input type="text" id="thread-id" placeholder="Optional exact match" /></label>
-          <label class="field limit">Results<select id="limit"><option>10</option><option selected>20</option><option>40</option></select></label>
-          <span class="hint">Press Enter to search · Shift+Enter for a new line</span>
+        <div class="filter-row">
+          <fieldset class="source-set" id="source-set">
+            <legend>Sources</legend>
+            <span class="source-state">Checking availability…</span>
+          </fieldset>
+          <label class="field">From (UTC)<input type="date" id="from" /></label
+          ><label class="field">To (UTC)<input type="date" id="to" /></label
+          ><label class="field speaker"
+            >Speaker<select id="author">
+              <option value="">Anyone</option>
+              <option value="user">Me</option>
+              <option value="assistant">Assistant</option>
+            </select></label
+          >
         </div>
+        <div class="presets">
+          <span class="field">Date range</span
+          ><button class="chip-button" type="button" data-range="7">
+            7 days</button
+          ><button class="chip-button" type="button" data-range="30">
+            30 days</button
+          ><button class="chip-button" type="button" data-range="year">
+            This year</button
+          ><button class="chip-button" type="button" data-range="clear">
+            Any time</button
+          ><button class="clear-button" id="clear-filters" type="button">
+            Clear all</button
+          ><span style="flex: 1"></span
+          ><button class="chip-button tray-button" id="open-tray" type="button">
+            Passages<span class="tray-count" id="tray-count">0</span>
+          </button>
+        </div>
+        <details class="advanced" id="advanced">
+          <summary>Advanced filters</summary>
+          <div class="advanced-fields">
+            <label class="field conversation"
+              >Conversation ID<input
+                type="text"
+                id="thread-id"
+                placeholder="Exact ID"
+                autocomplete="off" /></label
+            ><label class="field limit"
+              >Results<select id="limit">
+                <option>10</option>
+                <option selected>20</option>
+                <option>40</option>
+              </select></label
+            >
+          </div>
+        </details>
       </form>
-      <div class="notice" id="notice" aria-live="polite">Enter a question or topic to search your archive.</div>
-      <section id="result-section" hidden>
-        <div class="result-head"><h2>Search results</h2><span id="result-count"></span></div>
-        <div class="results" id="results"></div>
-      </section>
+      <div class="notice" id="notice" aria-live="polite">
+        Choose sources, then search your archive.
+      </div>
+      <div
+        class="active-filters"
+        id="active-filters"
+        aria-label="Active filters"
+      ></div>
+      <div class="workspace">
+        <section
+          class="result-column"
+          id="result-section"
+          aria-label="Search results"
+        >
+          <div class="result-head">
+            <h2>Results</h2>
+            <span id="result-count"></span>
+          </div>
+          <div
+            class="results"
+            id="results"
+            tabindex="0"
+            aria-label="Search results list"
+          >
+            <div class="empty">Search to see matching passages.</div>
+          </div>
+        </section>
+        <aside
+          class="reading-pane"
+          id="reading-pane"
+          aria-label="Source reader"
+        >
+          <div class="reader-placeholder">
+            <strong>Your reading pane</strong
+            ><span>Select a result to inspect its source.</span>
+          </div>
+        </aside>
+      </div>
     </main>
+    <dialog id="tray">
+      <div class="dialog-head">
+        <h2>Passage collection</h2>
+        <button class="text-button" id="close-tray" type="button">Close</button>
+      </div>
+      <p class="reader-subtitle">
+        Pinned passages remain here while this page is open.
+      </p>
+      <ul class="tray-list" id="tray-list"></ul>
+      <div class="dialog-actions">
+        <button class="chip-button" id="export-tray" type="button">
+          Export passages
+        </button>
+      </div>
+    </dialog>
     <script>
-      const form = document.querySelector('#search-form');
-      const queryInput = document.querySelector('#query');
-      const button = document.querySelector('#search-button');
-      const notice = document.querySelector('#notice');
-      const resultsRoot = document.querySelector('#results');
-      const resultSection = document.querySelector('#result-section');
-
-      function node(tag, className, text) {
-        const el = document.createElement(tag);
-        if (className) el.className = className;
-        if (text !== undefined) el.textContent = text;
-        return el;
-      }
-      function prettyDate(value) {
-        if (!value) return 'Date unavailable';
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-      }
-      function appendMessage(parent, text) {
-        const value = text || '[No text]';
-        const maxExcerpt = 1400;
-        if (value.length <= maxExcerpt) {
-          parent.append(node('p', 'message', value));
-          return;
+      (() => {
+        "use strict";
+        const $ = (selector) => document.querySelector(selector),
+          byId = (id) => document.getElementById(id);
+        const sources = [
+          ["chatgpt", "ChatGPT"],
+          ["google_search", "Google Search"],
+          ["apple_notes", "Apple Notes"],
+          ["voicememo", "Voice Memos"],
+        ];
+        const form = byId("search-form"),
+          queryInput = byId("query"),
+          searchButton = byId("search-button"),
+          notice = byId("notice"),
+          resultsRoot = byId("results"),
+          resultSection = byId("result-section"),
+          pane = byId("reading-pane");
+        const statusMap = new Map(),
+          threadCache = new Map(),
+          pinned = new Map();
+        let items = [],
+          selectedID = "",
+          generation = 0,
+          currentAbort = null,
+          readerMessages = [],
+          readerIndex = -1,
+          matchedIndex = -1,
+          readerTab = "formatted",
+          mobileRestoreScroll = 0,
+          restoring = false;
+        function make(tag, className = "", text) {
+          const e = document.createElement(tag);
+          if (className) e.className = className;
+          if (text !== undefined) e.textContent = text;
+          return e;
         }
-        parent.append(node('p', 'message', `${value.slice(0, maxExcerpt).trimEnd()}…`));
-        const details = node('details', 'full-message');
-        details.append(node('summary', '', 'Read full message'));
-        details.append(node('p', 'message', value));
-        parent.append(details);
-      }
-      async function updateStatus() {
-        const label = document.querySelector('#index-state');
-        const dot = document.querySelector('#health-dot');
-        try {
-          const response = await fetch(`/status?source=${encodeURIComponent(document.querySelector('#source').value)}`);
-          if (!response.ok) throw new Error('offline');
-          const info = await response.json();
-          label.textContent = `${info.points.toLocaleString()} records indexed`;
-          dot.classList.add('ready');
-        } catch (_) {
-          label.textContent = 'Local index unavailable';
-          dot.classList.remove('ready');
+        function sourceName(id) {
+          return sources.find((x) => x[0] === id)?.[1] || id;
         }
-      }
-      function renderThread(container, messages, truncated) {
-        container.replaceChildren();
-        if (truncated) container.append(node('p', 'notice', 'Showing first 5,000 messages in this conversation.'));
-        for (const message of messages) {
-          const item = node('article', 'thread-entry');
-          const meta = node('div', 'meta');
-          meta.append(node('span', `author ${message.metadata?.author || ''}`, message.metadata?.author || 'unknown'));
-          meta.append(node('time', '', prettyDate(message.timestamp)));
-          item.append(meta);
-          appendMessage(item, message.text);
-          container.append(item);
+        function utcDate(value) {
+          if (!value) return "Date unavailable";
+          const d = new Date(value);
+          return Number.isNaN(d.getTime())
+            ? "Date unavailable"
+            : new Intl.DateTimeFormat(undefined, {
+                timeZone: "UTC",
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(d) + " UTC";
         }
-      }
-      function renderResult(item) {
-        const card = node('article', 'result');
-        const main = node('div', 'result-main');
-        const meta = node('div', 'meta');
-        const author = item.source === 'google_search' ? `Google Search · ${item.metadata?.account || ''}` : item.metadata?.author || item.source;
-        meta.append(node('span', `author ${author}`, author));
-        meta.append(node('time', '', prettyDate(item.timestamp)));
-        if (item.metadata?.title) meta.append(node('span', 'title', item.metadata.title));
-        meta.append(node('span', 'score', item.metadata?.source_rank ? `Source rank ${item.metadata.source_rank}` : `Similarity ${item.score.toFixed(3)}`));
-        main.append(meta);
-        appendMessage(main, item.text);
-        const actions = node('div', 'result-actions');
-        const threadID = item.source === 'chatgpt' ? item.metadata?.thread_id : undefined;
-        let threadPanel;
-        if (threadID) {
-          const toggle = node('button', 'text-button', 'Open conversation');
-          toggle.type = 'button';
-          toggle.addEventListener('click', async () => {
-            if (threadPanel) {
-              threadPanel.remove();
-              threadPanel = undefined;
-              toggle.textContent = 'Open conversation';
-              return;
-            }
-            toggle.disabled = true;
-            toggle.textContent = 'Loading…';
-            try {
-              const response = await fetch(`/thread?thread_id=${encodeURIComponent(threadID)}`);
-              if (!response.ok) throw new Error(await response.text());
-              const data = await response.json();
-              threadPanel = node('div', 'thread');
-              renderThread(threadPanel, data.results || [], data.truncated);
-              card.append(threadPanel);
-              toggle.textContent = 'Close conversation';
-            } catch (_) {
-              toggle.textContent = 'Could not load conversation';
-            } finally {
-              toggle.disabled = false;
-            }
-          });
-          actions.append(toggle);
-          const searchInThread = node('button', 'text-button', 'Search this conversation');
-          searchInThread.type = 'button';
-          searchInThread.addEventListener('click', () => {
-            document.querySelector('#source').value = 'chatgpt';
-            document.querySelector('#source').dispatchEvent(new Event('change'));
-            document.querySelector('#thread-id').value = threadID;
-            form.requestSubmit();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          });
-          actions.append(searchInThread);
+        function selectedSources() {
+          return Array.from(
+            document.querySelectorAll(".source-check:checked"),
+          ).map((c) => c.value);
         }
-        if (item.source !== 'chatgpt') {
-          const url = item.metadata?.url;
-          if (url) {
-            try {
-              const parsed = new URL(url);
-              if (['https:', 'http:'].includes(parsed.protocol)) {
-                const link = node('a', 'text-button', 'Original URL');
-                link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-                actions.append(link);
-              }
-            } catch (_) {}
+        function formState() {
+          return {
+            query: queryInput.value,
+            sources: selectedSources(),
+            from: byId("from").value,
+            to: byId("to").value,
+            author: byId("author").value,
+            threadID: byId("thread-id").value.trim(),
+            limit: Number(byId("limit").value) || 20,
+          };
+        }
+        function applyState(s) {
+          queryInput.value = s.query || "";
+          byId("from").value = s.from || "";
+          byId("to").value = s.to || "";
+          byId("author").value = s.author || "";
+          byId("thread-id").value = s.threadID || "";
+          byId("limit").value = String(s.limit || 20);
+          const wanted = new Set(s.sources || []);
+          document
+            .querySelectorAll(".source-check")
+            .forEach((c) => (c.checked = wanted.has(c.value)));
+          renderFilterChips();
+        }
+        function renderFilterChips() {
+          const root = byId("active-filters");
+          root.replaceChildren();
+          const s = formState(),
+            chips = [];
+          for (const source of s.sources)
+            chips.push([
+              sourceName(source),
+              () => {
+                const check = document.querySelector(
+                  `.source-check[value="${CSS.escape(source)}"]`,
+                );
+                if (check) check.checked = false;
+                renderFilterChips();
+              },
+            ]);
+          if (s.from || s.to)
+            chips.push([
+              `${s.from || "…"} – ${s.to || "…"} UTC`,
+              () => {
+                byId("from").value = "";
+                byId("to").value = "";
+                renderFilterChips();
+              },
+            ]);
+          if (s.author)
+            chips.push([
+              s.author === "user" ? "Speaker: Me" : "Speaker: Assistant",
+              () => {
+                byId("author").value = "";
+                renderFilterChips();
+              },
+            ]);
+          if (s.threadID) {
+            const selected = items.find(
+              (x) => x.metadata?.thread_id === s.threadID,
+            );
+            chips.push([
+              `Conversation: ${selected?.metadata?.title || s.threadID}`,
+              () => {
+                byId("thread-id").value = "";
+                renderFilterChips();
+              },
+            ]);
           }
-          const provenance = node('details', 'full-message');
-          provenance.append(node('summary', '', 'Record provenance'));
-          provenance.append(node('pre', 'message', JSON.stringify(item.metadata, null, 2)));
-          main.append(provenance);
+          for (const [label, remove] of chips) {
+            const chip = make("span", "filter-chip");
+            chip.append(make("span", "", label));
+            const b = make("button", "", "×");
+            b.type = "button";
+            b.setAttribute("aria-label", `Remove ${label} filter`);
+            b.addEventListener("click", remove);
+            chip.append(b);
+            root.append(chip);
+          }
         }
-        const copy = node('button', 'text-button', 'Copy message');
-        copy.type = 'button';
-        copy.addEventListener('click', async () => {
-          try { await navigator.clipboard.writeText(item.text || ''); copy.textContent = 'Copied'; }
-          catch (_) { copy.textContent = 'Copy unavailable'; }
-          setTimeout(() => { copy.textContent = 'Copy message'; }, 1600);
-        });
-        actions.append(copy);
-        card.append(main, actions);
-        return card;
-      }
-      queryInput.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-          event.preventDefault();
-          form.requestSubmit();
+        function queryTerms(query) {
+          return Array.from(
+            new Set(query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []),
+          ).slice(0, 14);
         }
-      });
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const query = queryInput.value.trim();
-        if (!query) return;
-        button.disabled = true;
-        button.textContent = 'Searching…';
-        notice.className = 'notice';
-        notice.textContent = 'Searching your archive…';
-        resultsRoot.replaceChildren();
-        resultSection.hidden = true;
-        const source = document.querySelector('#source').value;
-        const filters = { source: [source] };
-        const author = document.querySelector('#author').value;
-        if (source === 'chatgpt' && author) filters.author = author;
-        const threadID = document.querySelector('#thread-id').value.trim();
-        if (source === 'chatgpt' && threadID) filters.thread_id = threadID;
-        const from = document.querySelector('#from').value;
-        const to = document.querySelector('#to').value;
-        if (from || to) filters.date = { from, to };
-        try {
-          const response = await fetch('/search', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, filters, limit: Number(document.querySelector('#limit').value) }),
-          });
-          if (!response.ok) throw new Error((await response.text()).trim() || `Search failed (${response.status})`);
-          const data = await response.json();
-          const results = data.results || [];
-          document.querySelector('#result-count').textContent = `${results.length} ${results.length === 1 ? 'record' : 'records'}`;
-          if (!results.length) {
-            notice.textContent = 'No matches found. Try a broader question or remove a filter.';
+        function excerptFor(text, query) {
+          const paragraphs = (text || "")
+            .split(/\n\s*\n/)
+            .map((p) => p.trim())
+            .filter(Boolean);
+          const segments = paragraphs.length
+            ? paragraphs
+            : (text || "").split(/(?<=[.!?])\s+/).filter(Boolean);
+          const terms = queryTerms(query);
+          let best = segments[0] || text || "";
+          let bestScore = -1;
+          for (const segment of segments) {
+            const lower = segment.toLowerCase();
+            const score = terms.reduce(
+              (n, t) => n + (lower.includes(t) ? 1 : 0),
+              0,
+            );
+            if (score > bestScore) {
+              best = segment;
+              bestScore = score;
+            }
+            if (bestScore === terms.length && terms.length) break;
+          }
+          const clean = best.replace(/\s+/g, " ").trim();
+          if (clean.length <= 360) return clean;
+          return clean.slice(0, 357).trimEnd() + "…";
+        }
+        function appendLiteralMarks(parent, text, terms) {
+          if (!terms.length) {
+            parent.append(document.createTextNode(text));
             return;
           }
-          notice.textContent = '';
-          results.forEach((item) => resultsRoot.append(renderResult(item)));
-          resultSection.hidden = false;
-        } catch (error) {
-          notice.className = 'notice error';
-          notice.textContent = `Search failed: ${error.message}. Check that the local search server and Ollama are running.`;
-        } finally {
-          button.disabled = false;
-          button.textContent = 'Search';
+          const escaped = terms
+            .slice()
+            .sort((a, b) => b.length - a.length)
+            .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+          if (!escaped.length) {
+            parent.append(document.createTextNode(text));
+            return;
+          }
+          const re = new RegExp(`(${escaped.join("|")})`, "giu");
+          let cursor = 0;
+          for (const match of text.matchAll(re)) {
+            if (match.index > cursor)
+              parent.append(
+                document.createTextNode(text.slice(cursor, match.index)),
+              );
+            parent.append(make("mark", "", match[0]));
+            cursor = match.index + match[0].length;
+          }
+          if (cursor < text.length)
+            parent.append(document.createTextNode(text.slice(cursor)));
         }
-      });
-      document.querySelector('#source').addEventListener('change', () => {
-        const chatOnlyFiltersDisabled = document.querySelector('#source').value !== 'chatgpt';
-        document.querySelector('#author').disabled = chatOnlyFiltersDisabled;
-        document.querySelector('#thread-id').disabled = chatOnlyFiltersDisabled;
-        resultsRoot.replaceChildren(); resultSection.hidden = true;
-        updateStatus();
-      });
-      const initialSource = new URLSearchParams(window.location.search).get('source');
-      const sourceSelect = document.querySelector('#source');
-      if (initialSource && Array.from(sourceSelect.options).some(option => option.value === initialSource)) {
-        sourceSelect.value = initialSource;
-        sourceSelect.dispatchEvent(new Event('change'));
-      } else {
-        updateStatus();
-      }
+        function copyPayload(item, text = item.text) {
+          const meta = item.metadata || {};
+          const who =
+            meta.author || meta.transcript_source || "Unknown speaker";
+          const title = meta.title || sourceName(item.source);
+          const native =
+            meta.native_id ||
+            meta.source_unique_id ||
+            meta.memo_id ||
+            meta.thread_id ||
+            item.id;
+          return `${text}\n\nSource: ${title} — ${who} — ${utcDate(item.timestamp)}\nSource type: ${sourceName(item.source)}\nSource ID: ${native}`;
+        }
+        async function copyText(text, button, label = "Copied with source") {
+          try {
+            await navigator.clipboard.writeText(text);
+            button.textContent = label;
+            setTimeout(() => {
+              if (button.isConnected) button.textContent = "Copy with source";
+            }, 1600);
+          } catch (_) {
+            button.textContent = "Copy unavailable";
+          }
+        }
+        function renderResult(item) {
+          const card = make("article", "result");
+          card.dataset.id = item.id;
+          card.classList.toggle("selected", item.id === selectedID);
+          const main = make("div", "result-main");
+          const title = item.metadata?.title || sourceName(item.source);
+          const open = make("button", "result-title", title);
+          open.type = "button";
+          open.addEventListener("click", () => openReader(item, true));
+          main.append(open);
+          const excerpt = excerptFor(item.text, queryInput.value);
+          const p = make("p", "excerpt");
+          appendLiteralMarks(p, excerpt, queryTerms(queryInput.value));
+          main.append(p);
+          if ((item.text || "").length > excerpt.length) {
+            const expand = make("button", "expand-excerpt", "Expand passage");
+            expand.type = "button";
+            expand.setAttribute("aria-expanded", "false");
+            expand.addEventListener("click", () => {
+              const expanded = expand.getAttribute("aria-expanded") === "true";
+              expand.setAttribute("aria-expanded", String(!expanded));
+              expand.textContent = expanded
+                ? "Expand passage"
+                : "Collapse passage";
+              p.classList.toggle("expanded", !expanded);
+              p.textContent = "";
+              appendLiteralMarks(
+                p,
+                expanded ? excerpt : item.text,
+                queryTerms(queryInput.value),
+              );
+            });
+            main.append(expand);
+          }
+          const meta = make("div", "result-meta");
+          meta.append(make("span", "source-label", sourceName(item.source)));
+          if (item.metadata?.author)
+            meta.append(make("span", "", item.metadata.author));
+          meta.append(make("time", "", utcDate(item.timestamp)));
+          card.append(main);
+          const actions = make("div", "result-actions");
+          const copy = make("button", "text-button", "Copy with source");
+          copy.type = "button";
+          copy.addEventListener("click", () =>
+            copyText(copyPayload(item), copy),
+          );
+          actions.append(copy);
+          const read = make("button", "text-button", "Read context");
+          read.type = "button";
+          read.addEventListener("click", () => openReader(item, true));
+          actions.append(read);
+          const pin = make(
+            "button",
+            "text-button",
+            pinned.has(item.id) ? "Pinned" : "Pin passage",
+          );
+          pin.type = "button";
+          pin.disabled = pinned.has(item.id);
+          pin.addEventListener("click", () => {
+            pinned.set(item.id, { ...item, text: item.text });
+            renderTray();
+            pin.textContent = "Pinned";
+            pin.disabled = true;
+          });
+          actions.append(pin);
+          card.append(actions);
+          const details = make("details", "details");
+          const summary = make("summary", "", "Details");
+          details.append(summary);
+          const score = make(
+            "p",
+            "",
+            item.metadata?.source_rank
+              ? `Source rank ${item.metadata.source_rank}`
+              : `Similarity ${Number(item.score).toFixed(3)}`,
+          );
+          details.append(score);
+          const pre = make(
+            "pre",
+            "",
+            JSON.stringify(item.metadata || {}, null, 2),
+          );
+          details.append(pre);
+          card.append(details);
+          return card;
+        }
+        function renderResults(scrollTop = 0) {
+          resultsRoot.replaceChildren();
+          if (!items.length) {
+            resultsRoot.append(
+              make(
+                "div",
+                "no-results",
+                "No matches. Broaden your query or remove a filter.",
+              ),
+            );
+            resultSection.hidden = false;
+            byId("result-count").textContent = "0 records";
+            return;
+          }
+          for (const item of items) resultsRoot.append(renderResult(item));
+          resultSection.hidden = false;
+          byId("result-count").textContent =
+            `${items.length} ${items.length === 1 ? "passage" : "passages"}`;
+          document.body.classList.add("has-results");
+          resultsRoot.scrollTop = scrollTop;
+        }
+        function updateChatOnlyFilters() {
+          byId("author").disabled = !(
+            selectedSources().length === 1 && selectedSources()[0] === "chatgpt"
+          );
+        }
+        async function loadStatuses() {
+          const results = await Promise.all(
+            sources.map(async ([id]) => {
+              try {
+                const r = await fetch(
+                  `/status?source=${encodeURIComponent(id)}`,
+                  { cache: "no-store" },
+                );
+                if (!r.ok) throw new Error(String(r.status));
+                const data = await r.json();
+                return [id, { ok: true, points: data.points }];
+              } catch (e) {
+                return [id, { ok: false, error: e.message }];
+              }
+            }),
+          );
+          for (const [id, state] of results) statusMap.set(id, state);
+          const set = byId("source-set");
+          set.replaceChildren(make("legend", "", "Sources"));
+          for (const [id, label] of sources) {
+            const state = statusMap.get(id),
+              wrap = make(
+                "label",
+                `source-choice${state?.ok ? "" : " unavailable"}`,
+              ),
+              check = document.createElement("input");
+            check.type = "checkbox";
+            check.className = "source-check";
+            check.value = id;
+            check.disabled = !state?.ok;
+            check.setAttribute(
+              "aria-label",
+              label + (state?.ok ? "" : ", index unavailable"),
+            );
+            check.addEventListener("change", () => {
+              renderFilterChips();
+              updateChatOnlyFilters();
+            });
+            wrap.append(check, document.createTextNode(` ${label}`));
+            if (!state?.ok)
+              wrap.append(make("span", "source-state", " unavailable"));
+            set.append(wrap);
+          }
+          const available = sources
+            .filter(([id]) => statusMap.get(id)?.ok)
+            .map((x) => x[0]);
+          let chosen = new URLSearchParams(location.search)
+            .getAll("source")
+            .filter((id) => available.includes(id));
+          if (!chosen.length) {
+            const hinted = new URLSearchParams(location.search).get("source");
+            if (hinted && available.includes(hinted)) chosen = [hinted];
+            else if (available.includes("chatgpt")) chosen = ["chatgpt"];
+            else chosen = available.slice(0, 1);
+          }
+          document
+            .querySelectorAll(".source-check")
+            .forEach((c) => (c.checked = chosen.includes(c.value)));
+          const total = available.reduce(
+            (n, id) => n + (statusMap.get(id)?.points || 0),
+            0,
+          );
+          byId("index-state").textContent =
+            `${total.toLocaleString()} records · ${available.length}/${sources.length} sources`;
+          byId("health-dot").className =
+            `dot ${available.length === sources.length ? "ready" : "partial"}`;
+          renderFilterChips();
+          updateChatOnlyFilters();
+        }
+        function updateURL(s, replace = false) {
+          const url = new URL(location.href);
+          url.searchParams.delete("source");
+          for (const id of s.sources) url.searchParams.append("source", id);
+          replace
+            ? history.replaceState(history.state, "", url)
+            : history.pushState(history.state, "", url);
+        }
+        async function submitSearch({
+          historyEntry = true,
+          stateOverride = null,
+          scrollTop = 0,
+        } = {}) {
+          const s = stateOverride || formState();
+          if (!s.query.trim()) return;
+          if (!s.sources.length) {
+            notice.className = "notice error";
+            notice.textContent = "Select at least one available source.";
+            return;
+          }
+          if (
+            s.author &&
+            (s.sources.length !== 1 || s.sources[0] !== "chatgpt")
+          ) {
+            notice.className = "notice error";
+            notice.textContent =
+              "Choose ChatGPT alone to use the speaker filter.";
+            return;
+          }
+          if (historyEntry && !restoring) {
+            history.replaceState(
+              {
+                search: formState(),
+                selectedID,
+                scrollTop: resultsRoot.scrollTop,
+              },
+              "",
+            );
+            updateURL(s, false);
+          }
+          if (currentAbort) currentAbort.abort();
+          currentAbort = new AbortController();
+          const requestID = ++generation;
+          notice.className = "notice updating";
+          notice.textContent = "Updating results…";
+          document.body.classList.add("is-loading");
+          searchButton.disabled = true;
+          const filters = { source: s.sources };
+          if (s.author && s.sources.length === 1 && s.sources[0] === "chatgpt")
+            filters.author = s.author;
+          if (
+            s.threadID &&
+            s.sources.length === 1 &&
+            s.sources[0] === "chatgpt"
+          )
+            filters.thread_id = s.threadID;
+          if (s.from || s.to) filters.date = { from: s.from, to: s.to };
+          try {
+            const response = await fetch("/search", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ query: s.query, filters, limit: s.limit }),
+              signal: currentAbort.signal,
+              cache: "no-store",
+            });
+            if (!response.ok)
+              throw new Error(
+                (await response.text()).trim() ||
+                  `Search failed (${response.status})`,
+              );
+            const data = await response.json();
+            if (requestID !== generation) return;
+            queryInput.value = s.query;
+            items = data.results || [];
+            selectedID = items.some((x) => x.id === selectedID)
+              ? selectedID
+              : "";
+            renderResults(scrollTop);
+            notice.textContent = items.length
+              ? ""
+              : `No matches. ${
+                  s.sources
+                    .filter((id) => !statusMap.get(id)?.points)
+                    .map(sourceName)
+                    .join(", ") || "Try broader terms."
+                }`;
+            notice.className = "notice";
+            renderFilterChips();
+            const prior = history.state || {};
+            history.replaceState(
+              {
+                ...prior,
+                search: s,
+                selectedID,
+                scrollTop: resultsRoot.scrollTop,
+              },
+              "",
+            );
+            if (selectedID) {
+              const item = items.find((x) => x.id === selectedID);
+              if (item) openReader(item, false);
+            } else showPlaceholder();
+          } catch (error) {
+            if (error.name === "AbortError" || requestID !== generation) return;
+            notice.className = "notice error";
+            notice.textContent = `Search failed: ${error.message}`;
+          } finally {
+            if (requestID === generation) {
+              document.body.classList.remove("is-loading");
+              searchButton.disabled = false;
+            }
+          }
+        }
+        function showPlaceholder() {
+          readerMessages = [];
+          readerIndex = -1;
+          pane.replaceChildren();
+          const placeholder = make("div", "reader-placeholder");
+          placeholder.append(
+            make("strong", "", "Your reading pane"),
+            make(
+              "span",
+              "",
+              items.length
+                ? "Select a result to inspect its source."
+                : "Search to see matching passages.",
+            ),
+          );
+          pane.append(placeholder);
+          document.body.classList.remove("reading-open");
+        }
+        function appendInline(parent, text) {
+          const re = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\))/g;
+          let pos = 0;
+          for (const m of text.matchAll(re)) {
+            if (m.index > pos)
+              parent.append(document.createTextNode(text.slice(pos, m.index)));
+            const token = m[0];
+            let el;
+            if (token.startsWith("`")) {
+              el = make("code");
+              el.textContent = token.slice(1, -1);
+            } else if (token.startsWith("**")) {
+              el = make("strong");
+              el.textContent = token.slice(2, -2);
+            } else if (token.startsWith("*")) {
+              el = make("em");
+              el.textContent = token.slice(1, -1);
+            } else {
+              const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token),
+                url = link && safeURL(link[2]);
+              if (url) {
+                el = make("a");
+                el.textContent = link[1];
+                el.href = url;
+                el.target = "_blank";
+                el.rel = "noopener noreferrer";
+              } else el = document.createTextNode(token);
+            }
+            parent.append(el);
+            pos = m.index + token.length;
+          }
+          if (pos < text.length)
+            parent.append(document.createTextNode(text.slice(pos)));
+        }
+        function safeURL(value) {
+          try {
+            const u = new URL(value);
+            return ["https:", "http:"].includes(u.protocol) ? u.href : null;
+          } catch (_) {
+            return null;
+          }
+        }
+        function formattedMarkdown(text) {
+          const root = make("div", "formatted");
+          let lines = (text || "").split("\n"),
+            i = 0,
+            inCode = false,
+            code = [];
+          while (i < lines.length) {
+            const line = lines[i];
+            if (line.trim().startsWith("```")) {
+              if (inCode) {
+                const pre = make("pre"),
+                  c = make("code");
+                c.textContent = code.join("\n");
+                pre.append(c);
+                root.append(pre);
+                code = [];
+                inCode = false;
+              } else inCode = true;
+              i++;
+              continue;
+            }
+            if (inCode) {
+              code.push(line);
+              i++;
+              continue;
+            }
+            if (!line.trim()) {
+              i++;
+              continue;
+            }
+            const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+            if (heading) {
+              const h = make(`h${heading[1].length}`);
+              appendInline(h, heading[2]);
+              root.append(h);
+              i++;
+              continue;
+            }
+            if (/^\s*[-*+]\s+/.test(line)) {
+              const ul = make("ul");
+              while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+                const li = make("li");
+                appendInline(li, lines[i].replace(/^\s*[-*+]\s+/, ""));
+                ul.append(li);
+                i++;
+              }
+              root.append(ul);
+              continue;
+            }
+            const p = make("p");
+            appendInline(p, line);
+            root.append(p);
+            i++;
+          }
+          if (inCode) {
+            const pre = make("pre"),
+              c = make("code");
+            c.textContent = code.join("\n");
+            pre.append(c);
+            root.append(pre);
+          }
+          return root;
+        }
+        function renderReaderBody() {
+          const body = byId("reader-body");
+          body.replaceChildren();
+          if (!readerMessages.length) return;
+          const item = items.find((x) => x.id === selectedID);
+          const context = make(
+            "p",
+            "reader-context-notice",
+            item?.source === "chatgpt"
+              ? "Conversation context · matched message highlighted"
+              : "Full indexed source record · surrounding source context is not available here",
+          );
+          body.append(context);
+          const radius = 20,
+            start = Math.max(0, readerIndex - radius),
+            end = Math.min(readerMessages.length, readerIndex + radius + 1);
+          if (start > 0)
+            body.append(
+              make(
+                "p",
+                "reader-context-notice",
+                `${start} earlier messages · use Previous to navigate`,
+              ),
+            );
+          for (let i = start; i < end; i++) {
+            const message = readerMessages[i],
+              section = make(
+                "article",
+                `reader-message${i === matchedIndex ? " matched" : ""}${i === readerIndex ? " active" : ""}`,
+              );
+            section.id = `reader-message-${i}`;
+            const meta = message.metadata || {},
+              head = make("div", "reader-message-header");
+            head.append(
+              make(
+                "span",
+                "speaker",
+                meta.author || meta.transcript_source || "Message",
+              ),
+              make("time", "", utcDate(message.timestamp)),
+            );
+            section.append(
+              head,
+              readerTab === "raw"
+                ? make("pre", "raw-text", message.text || "")
+                : formattedMarkdown(message.text || ""),
+            );
+            body.append(section);
+          }
+          if (end < readerMessages.length)
+            body.append(
+              make(
+                "p",
+                "reader-context-notice",
+                `${readerMessages.length - end} later messages · use Next to navigate`,
+              ),
+            );
+          const footer = make("div", "reader-footer");
+          const copy = make("button", "text-button", "Copy with source");
+          copy.type = "button";
+          copy.addEventListener("click", () =>
+            copyText(
+              copyPayload(
+                item,
+                readerMessages[readerIndex]?.text || item?.text || "",
+              ),
+              copy,
+            ),
+          );
+          footer.append(copy);
+          const pin = make("button", "text-button", "Pin passage");
+          pin.type = "button";
+          pin.disabled = pinned.has(item?.id);
+          if (pin.disabled) pin.textContent = "Pinned";
+          pin.addEventListener("click", () => {
+            if (item) {
+              pinned.set(item.id, {
+                ...item,
+                text: readerMessages[readerIndex]?.text || item.text,
+              });
+              renderTray();
+              pin.textContent = "Pinned";
+              pin.disabled = true;
+            }
+          });
+          footer.append(pin);
+          body.append(footer);
+        }
+        function renderReader() {
+          const item = items.find((x) => x.id === selectedID);
+          pane.replaceChildren();
+          if (!item) {
+            showPlaceholder();
+            return;
+          }
+          const head = make("div", "reader-head"),
+            back = make("button", "reader-back", "← Back to results");
+          back.type = "button";
+          back.addEventListener("click", () => {
+            document.body.classList.remove("reading-open");
+            resultsRoot.scrollTop = mobileRestoreScroll;
+            const active = resultsRoot.querySelector(
+              ".result.selected .result-title",
+            );
+            if (active) active.focus();
+          });
+          const heading = make("div", "reader-heading"),
+            title = make(
+              "h2",
+              "",
+              item.metadata?.title || sourceName(item.source),
+            );
+          heading.append(
+            title,
+            make(
+              "div",
+              "reader-subtitle",
+              `${sourceName(item.source)} · ${item.metadata?.author || item.metadata?.transcript_source || "Source"} · ${utcDate(item.timestamp)}`,
+            ),
+          );
+          const controls = make("div", "reader-controls");
+          if (item.source === "chatgpt" && readerMessages.length) {
+            const prev = make("button", "nav-button", "Previous");
+            prev.type = "button";
+            prev.disabled = readerIndex <= 0;
+            prev.addEventListener("click", () => moveReader(-1));
+            const count = make(
+              "span",
+              "nav-count",
+              `${readerIndex + 1} / ${readerMessages.length}`,
+            );
+            const next = make("button", "nav-button", "Next");
+            next.type = "button";
+            next.disabled = readerIndex >= readerMessages.length - 1;
+            next.addEventListener("click", () => moveReader(1));
+            controls.append(prev, count, next);
+          }
+          if (item.metadata?.thread_id) {
+            const inConversation = make(
+              "button",
+              "nav-button",
+              "Search this conversation",
+            );
+            inConversation.type = "button";
+            inConversation.addEventListener("click", () => {
+              document
+                .querySelectorAll(".source-check")
+                .forEach((c) => (c.checked = c.value === "chatgpt"));
+              updateChatOnlyFilters();
+              byId("author").value = "";
+              byId("thread-id").value = item.metadata.thread_id;
+              byId("advanced").open = true;
+              renderFilterChips();
+              form.requestSubmit();
+            });
+            controls.append(inConversation);
+          }
+          head.append(back, heading, controls);
+          pane.append(head);
+          const tabs = make("div", "reader-tabs");
+          for (const [value, label] of [
+            ["formatted", "Formatted"],
+            ["raw", "Raw text"],
+          ]) {
+            const b = make("button", "reader-tab", label);
+            b.type = "button";
+            b.setAttribute("aria-pressed", String(readerTab === value));
+            b.addEventListener("click", () => {
+              readerTab = value;
+              renderReaderBody();
+            });
+            tabs.append(b);
+          }
+          const body = make("div", "reader-body");
+          body.id = "reader-body";
+          pane.append(tabs, body);
+          renderReaderBody();
+          if (document.body.classList.contains("reading-open")) back.focus();
+        }
+        async function openReader(item, saveScroll) {
+          if (saveScroll) mobileRestoreScroll = resultsRoot.scrollTop;
+          selectedID = item.id;
+          for (const card of resultsRoot.querySelectorAll(".result"))
+            card.classList.toggle("selected", card.dataset.id === selectedID);
+          document.body.classList.toggle(
+            "reading-open",
+            window.matchMedia("(max-width: 600px)").matches,
+          );
+          const s = formState();
+          const prior = history.state || {};
+          history.replaceState(
+            {
+              ...prior,
+              search: s,
+              selectedID,
+              scrollTop: resultsRoot.scrollTop,
+            },
+            "",
+          );
+          readerMessages = [item];
+          readerIndex = matchedIndex = 0;
+          renderReader();
+          if (item.source !== "chatgpt" || !item.metadata?.thread_id) return;
+          try {
+            if (!threadCache.has(item.metadata.thread_id)) {
+              const response = await fetch(
+                `/thread?thread_id=${encodeURIComponent(item.metadata.thread_id)}`,
+                { cache: "no-store" },
+              );
+              if (!response.ok) throw new Error(await response.text());
+              threadCache.set(item.metadata.thread_id, await response.json());
+            }
+            if (selectedID !== item.id) return;
+            const data = threadCache.get(item.metadata.thread_id);
+            readerMessages = data.results || [];
+            matchedIndex = readerMessages.findIndex((m) => m.id === item.id);
+            readerIndex = matchedIndex;
+            if (readerIndex < 0) {
+              readerMessages = [item];
+              readerIndex = matchedIndex = 0;
+            }
+            renderReader();
+            if (readerIndex >= 0) {
+              const target = pane.querySelector(".reader-message.matched");
+              if (target) target.scrollIntoView({ block: "center" });
+            }
+            if (data.truncated) {
+              const warn = make(
+                "p",
+                "reader-context-notice",
+                "Conversation is truncated at 5,000 messages.",
+              );
+              pane.querySelector(".reader-body").prepend(warn);
+            }
+          } catch (error) {
+            if (selectedID !== item.id) return;
+            readerMessages = [item];
+            readerIndex = matchedIndex = 0;
+            renderReader();
+            pane
+              .querySelector(".reader-body")
+              ?.prepend(
+                make(
+                  "p",
+                  "reader-context-notice",
+                  `Could not load conversation context: ${error.message}`,
+                ),
+              );
+          }
+        }
+        function moveReader(delta) {
+          const next = readerIndex + delta;
+          if (next < 0 || next >= readerMessages.length) return;
+          readerIndex = next;
+          renderReader();
+          const active = pane.querySelector(".reader-message.active");
+          if (active)
+            active.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+        function renderTray() {
+          const count = byId("tray-count");
+          count.textContent = String(pinned.size);
+          const list = byId("tray-list");
+          list.replaceChildren();
+          if (!pinned.size) {
+            list.append(make("li", "empty", "No passages pinned yet."));
+            return;
+          }
+          for (const [id, item] of pinned) {
+            const li = make("li", "tray-item"),
+              p = make("p", "", item.text),
+              small = make(
+                "small",
+                "",
+                `${item.metadata?.title || sourceName(item.source)} · ${item.metadata?.author || "Source"} · ${utcDate(item.timestamp)}`,
+              ),
+              remove = make("button", "text-button", "Remove");
+            remove.type = "button";
+            remove.addEventListener("click", () => {
+              pinned.delete(id);
+              renderTray();
+            });
+            li.append(p, small, make("br"), remove);
+            list.append(li);
+          }
+        }
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          submitSearch();
+        });
+        queryInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            form.requestSubmit();
+          }
+        });
+        byId("clear-filters").addEventListener("click", () => {
+          byId("from").value = "";
+          byId("to").value = "";
+          byId("author").value = "";
+          byId("thread-id").value = "";
+          byId("advanced").open = false;
+          document
+            .querySelectorAll(".source-check")
+            .forEach((c) => (c.checked = !c.disabled));
+          renderFilterChips();
+        });
+        document.querySelectorAll("[data-range]").forEach((button) =>
+          button.addEventListener("click", () => {
+            const value = button.dataset.range,
+              now = new Date(),
+              today = now.toISOString().slice(0, 10);
+            if (value === "clear") {
+              byId("from").value = "";
+              byId("to").value = "";
+            } else {
+              let from;
+              if (value === "year") from = `${now.getUTCFullYear()}-01-01`;
+              else {
+                const start = new Date(
+                  Date.UTC(
+                    now.getUTCFullYear(),
+                    now.getUTCMonth(),
+                    now.getUTCDate() - Number(value) + 1,
+                  ),
+                );
+                from = start.toISOString().slice(0, 10);
+              }
+              byId("from").value = from;
+              byId("to").value = today;
+            }
+            renderFilterChips();
+          }),
+        );
+        byId("open-tray").addEventListener("click", () => {
+          renderTray();
+          byId("tray").showModal();
+        });
+        byId("close-tray").addEventListener("click", () =>
+          byId("tray").close(),
+        );
+        byId("export-tray").addEventListener("click", async (event) => {
+          const text = Array.from(pinned.values(), (item) =>
+            copyPayload(item),
+          ).join("\n\n---\n\n");
+          await copyText(text, event.currentTarget, "Exported");
+        });
+        window.addEventListener("popstate", (event) => {
+          restoring = true;
+          const state = event.state;
+          if (state?.search) {
+            applyState(state.search);
+            queryInput.value = state.search.query;
+            resultsRoot.scrollTop = state.scrollTop || 0;
+            submitSearch({
+              historyEntry: false,
+              stateOverride: state.search,
+              scrollTop: state.scrollTop || 0,
+            }).then(() => {
+              selectedID = state.selectedID || "";
+              if (selectedID) {
+                const item = items.find((x) => x.id === selectedID);
+                if (item) openReader(item, false);
+              }
+            });
+          } else {
+            const params = new URLSearchParams(location.search),
+              sources = params.getAll("source");
+            if (sources.length)
+              document
+                .querySelectorAll(".source-check")
+                .forEach((c) => (c.checked = sources.includes(c.value)));
+            renderFilterChips();
+          }
+          setTimeout(() => {
+            restoring = false;
+          }, 0);
+        });
+        window.addEventListener("keydown", (event) => {
+          if (
+            event.altKey &&
+            event.key === "ArrowLeft" &&
+            readerMessages.length
+          ) {
+            event.preventDefault();
+            moveReader(-1);
+          }
+          if (
+            event.altKey &&
+            event.key === "ArrowRight" &&
+            readerMessages.length
+          ) {
+            event.preventDefault();
+            moveReader(1);
+          }
+          if (
+            event.key === "Escape" &&
+            document.body.classList.contains("reading-open")
+          )
+            document.body.classList.remove("reading-open");
+        });
+        loadStatuses().then(() => {
+          const params = new URLSearchParams(location.search),
+            sources = params.getAll("source");
+          if (params.has("q")) {
+            queryInput.value = params.get("q") || "";
+            if (queryInput.value) submitSearch({ historyEntry: false });
+          }
+          renderFilterChips();
+        });
+      })();
     </script>
   </body>
 </html>
