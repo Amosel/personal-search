@@ -313,7 +313,14 @@
         resultsRoot.replaceChildren(); resultSection.hidden = true;
         updateStatus();
       });
-      updateStatus();
+      const initialSource = new URLSearchParams(window.location.search).get('source');
+      const sourceSelect = document.querySelector('#source');
+      if (initialSource && Array.from(sourceSelect.options).some(option => option.value === initialSource)) {
+        sourceSelect.value = initialSource;
+        sourceSelect.dispatchEvent(new Event('change'));
+      } else {
+        updateStatus();
+      }
     </script>
   </body>
 </html>
