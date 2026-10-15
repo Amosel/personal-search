@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"personal-search/internal/embed"
 	"personal-search/internal/ingest"
@@ -41,14 +42,22 @@ func main() {
 		fatal(err.Error())
 	}
 	result, err := ingest.Run(context.Background(), ingest.Options{ExportPath: *exportPath, ReportPath: *reportPath, Collection: *collection, BatchSize: *batchSize, MaxDocs: *maxDocs}, emb, qdrant.New(*qdrantURL))
-	if result.Report != nil {
-		fmt.Printf("classification summary: total=%d documents=%d skipped=%d failed=%d\n", result.Report.Summary.TotalRecords, result.Report.Summary.DocumentsCreated, result.Report.Summary.Skipped, result.Report.Summary.Failed)
-	}
+	writeSummary(os.Stdout, result)
 	if err != nil {
 		fatal(err.Error())
 	}
-	fmt.Printf("ingestion complete: %d documents into %s\n", result.Documents, *collection)
+	fmt.Printf("ingestion complete: %d acknowledged documents into %s\n", result.Documents, *collection)
 	fmt.Printf("ingest report: %s\n", *reportPath)
+}
+
+func writeSummary(out io.Writer, result ingest.Result) {
+	if result.Report == nil {
+		return
+	}
+	s := result.Report.Summary
+	fmt.Fprintf(out, "classification summary: total=%d documents=%d skipped=%d failed=%d\n", s.TotalRecords, s.DocumentsCreated, s.Skipped, s.Failed)
+	p := result.Progress
+	fmt.Fprintf(out, "ingestion progress: classified=%d selected=%d acknowledged=%d uncertain=%d not_attempted=%d skipped=%d excluded_by_max_docs=%d\n", p.Classified, p.Selected, p.Acknowledged, p.Uncertain, p.NotAttempted, p.Skipped, p.ExcludedByMaxDocs)
 }
 
 func fatal(msg string) { fmt.Fprintln(os.Stderr, msg); os.Exit(1) }

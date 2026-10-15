@@ -2,7 +2,9 @@ package chatgpt
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -51,27 +53,52 @@ type IngestReportSummary struct {
 }
 
 type IngestReportFailure struct {
-	Stage   string `json:"stage"`
-	Message string `json:"message"`
+	Stage   string      `json:"stage"`
+	Message string      `json:"message"`
+	Batch   *BatchRange `json:"batch,omitempty"`
+}
+
+// BatchRange uses zero-based indexes into the selected documents, with an
+// exclusive end. An uncertain batch may have been applied by the store.
+type BatchRange struct {
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+// IngestProgress separates source classification from work sent to the store.
+// Classified counts canonical documents; Skipped counts source records.
+// Selected = Acknowledged + Uncertain + NotAttempted on every return.
+type IngestProgress struct {
+	Classified        int         `json:"classified"`
+	Selected          int         `json:"selected"`
+	Acknowledged      int         `json:"acknowledged"`
+	Uncertain         int         `json:"uncertain"`
+	NotAttempted      int         `json:"not_attempted"`
+	Skipped           int         `json:"skipped"`
+	ExcludedByMaxDocs int         `json:"excluded_by_max_docs"`
+	UncertainBatch    *BatchRange `json:"uncertain_batch,omitempty"`
 }
 
 type IngestReport struct {
-	Source     string                `json:"source"`
-	ExportPath string                `json:"export_path"`
-	StartedAt  string                `json:"started_at"`
-	FinishedAt string                `json:"finished_at,omitempty"`
-	Status     string                `json:"status"`
-	Summary    IngestReportSummary   `json:"summary"`
-	Entries    []ClassificationEntry `json:"entries"`
-	Failure    *IngestReportFailure  `json:"failure,omitempty"`
+	SchemaVersion int                   `json:"schema_version"`
+	Source        string                `json:"source"`
+	ExportPath    string                `json:"export_path"`
+	StartedAt     string                `json:"started_at"`
+	FinishedAt    string                `json:"finished_at,omitempty"`
+	Status        string                `json:"status"`
+	Summary       IngestReportSummary   `json:"summary"`
+	Entries       []ClassificationEntry `json:"entries"`
+	Failure       *IngestReportFailure  `json:"failure,omitempty"`
+	Progress      IngestProgress        `json:"progress"`
 }
 
 func NewIngestReport(exportPath string) *IngestReport {
 	return &IngestReport{
-		Source:     "chatgpt",
-		ExportPath: exportPath,
-		StartedAt:  time.Now().UTC().Format(time.RFC3339),
-		Status:     "running",
+		SchemaVersion: 1,
+		Source:        "chatgpt",
+		ExportPath:    exportPath,
+		StartedAt:     time.Now().UTC().Format(time.RFC3339),
+		Status:        "running",
 		Summary: IngestReportSummary{
 			ByReason: make(map[string]int),
 		},
@@ -89,8 +116,10 @@ func (r *IngestReport) Append(entry ClassificationEntry) {
 	switch entry.Outcome {
 	case OutcomeDocument:
 		r.Summary.DocumentsCreated++
+		r.Progress.Classified++
 	case OutcomeSkip:
 		r.Summary.Skipped++
+		r.Progress.Skipped++
 	case OutcomeFail:
 		r.Summary.Failed++
 	}
@@ -121,5 +150,38 @@ func (r *IngestReport) Write(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return writeReportAtomic(path, data)
+}
+
+// writeReportAtomic keeps both temporary and published reports private. A
+// failed write leaves the previous report intact; it cannot describe this run.
+func writeReportAtomic(path string, data []byte) (err error) {
+	f, err := os.CreateTemp(filepath.Dir(path), ".ingest-report-*")
+	if err != nil {
+		return err
+	}
+	name := f.Name()
+	closed := false
+	defer func() {
+		if !closed {
+			err = errors.Join(err, f.Close())
+		}
+		if err != nil {
+			if cleanupErr := os.Remove(name); cleanupErr != nil && !errors.Is(cleanupErr, os.ErrNotExist) {
+				err = errors.Join(err, cleanupErr)
+			}
+		}
+	}()
+	if _, err = f.Write(data); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	err = f.Close()
+	closed = true
+	if err != nil {
+		return err
+	}
+	return os.Rename(name, path)
 }
