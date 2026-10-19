@@ -70,7 +70,7 @@ func TestChatGPTIngestThenSearch(t *testing.T) {
 			payload[k] = v
 		}
 		points = append(points, qdrant.Point{
-			ID:      qdrantNumericID(d.ID),
+			ID:      qdrant.NumericID(qdrantNumericID(d.ID)),
 			Vector:  vectors[i],
 			Payload: payload,
 		})

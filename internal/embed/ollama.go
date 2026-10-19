@@ -49,6 +49,9 @@ func DetectOllamaDimension(ctx context.Context, baseURL, model string, client *h
 	if len(resp.Embeddings) != 1 || len(resp.Embeddings[0]) == 0 {
 		return 0, fmt.Errorf("unable to infer Ollama embedding dimension")
 	}
+	if err := ValidateVectors(resp.Embeddings, 1, len(resp.Embeddings[0])); err != nil {
+		return 0, err
+	}
 	return len(resp.Embeddings[0]), nil
 }
 
@@ -79,13 +82,8 @@ func (o *OllamaEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 	if err != nil {
 		return nil, err
 	}
-	if len(out.Embeddings) != len(texts) {
-		return nil, fmt.Errorf("embedding count mismatch got=%d want=%d", len(out.Embeddings), len(texts))
-	}
-	for i, emb := range out.Embeddings {
-		if len(emb) != o.DimVal {
-			return nil, fmt.Errorf("embedding at index %d has dimension %d, expected %d", i, len(emb), o.DimVal)
-		}
+	if err := ValidateVectors(out.Embeddings, len(texts), o.DimVal); err != nil {
+		return nil, err
 	}
 	return out.Embeddings, nil
 }

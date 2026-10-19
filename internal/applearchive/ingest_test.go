@@ -3,7 +3,9 @@ package applearchive
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -78,5 +80,47 @@ func TestSourceExporterFixtures(t *testing.T) {
 	out, err := exec.Command("python3", "-B", "-m", "unittest", "discover", "-s", ".", "-p", "*_test.py").CombinedOutput()
 	if err != nil {
 		t.Fatalf("Python exporter tests: %v\n%s", err, out)
+	}
+}
+
+type malformedEmbedder struct {
+	identifiedFake
+	vectors [][]float32
+}
+
+func (e malformedEmbedder) Embed(context.Context, []string) ([][]float32, error) {
+	return e.vectors, nil
+}
+func TestMalformedVectorsStopBeforeAppleStorage(t *testing.T) {
+	for _, source := range []string{"apple_notes", "voicememo"} {
+		for _, vectors := range [][][]float32{nil, {{1}}, {{1, float32(math.NaN())}}, {{1, float32(math.Inf(1))}}} {
+			t.Run(fmt.Sprint(source, vectors), func(t *testing.T) {
+				writes := 0
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method == "GET" {
+						fmt.Fprint(w, `{"result":{"config":{"params":{"vectors":{"size":2,"distance":"Cosine"}}}}}`)
+						return
+					}
+					if strings.HasSuffix(r.URL.Path, "/scroll") {
+						fmt.Fprint(w, `{"result":{"points":[]}}`)
+						return
+					}
+					writes++
+					fmt.Fprint(w, `{"result":{"status":"completed"}}`)
+				}))
+				defer server.Close()
+				kind := "note"
+				if source == "voicememo" {
+					kind = "transcript"
+				}
+				docs := []model.Document{{ID: "synthetic", Source: source, Type: kind, Timestamp: 1, Text: "example"}}
+				e := malformedEmbedder{identifiedFake: identifiedFake{embed.FakeEmbedder{DimVal: 2}}, vectors: vectors}
+				n, err := Run(context.Background(), docs, source, "synthetic", 1, &e, qdrant.New(server.URL))
+				var boundary *embed.VectorError
+				if n != 0 || writes != 0 || !errors.As(err, &boundary) {
+					t.Fatalf("n=%d writes=%d err=%v", n, writes, err)
+				}
+			})
+		}
 	}
 }

@@ -39,22 +39,22 @@ type SearchResponse struct {
 }
 
 type ScrollRequest struct {
-	Filter      *Filter `json:"filter,omitempty"`
-	Limit       int     `json:"limit"`
-	Offset      any     `json:"offset,omitempty"`
-	WithPayload bool    `json:"with_payload"`
-	WithVector  bool    `json:"with_vector"`
+	Filter      *Filter  `json:"filter,omitempty"`
+	Limit       int      `json:"limit"`
+	Offset      *PointID `json:"offset,omitempty"`
+	WithPayload bool     `json:"with_payload"`
+	WithVector  bool     `json:"with_vector"`
 }
 
 type ScrollResponse struct {
 	Result struct {
 		Points         []ScoredPoint `json:"points"`
-		NextPageOffset any           `json:"next_page_offset"`
+		NextPageOffset *PointID      `json:"next_page_offset"`
 	} `json:"result"`
 }
 
 type ScoredPoint struct {
-	ID      any            `json:"id"`
+	ID      PointID        `json:"id"`
 	Score   float64        `json:"score"`
 	Payload map[string]any `json:"payload"`
 }

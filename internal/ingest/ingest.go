@@ -2,9 +2,11 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"path/filepath"
+	"personal-search/internal/model"
 
 	"personal-search/internal/chatgpt"
 	"personal-search/internal/embed"
@@ -28,13 +30,15 @@ type Options struct {
 }
 
 type Result struct {
+	// Documents is the number acknowledged by storage, even on failure.
 	Documents int
+	Progress  model.IngestProgress
 	Report    *chatgpt.IngestReport
 }
 
 // Run performs the production Personal Search ingestion computation: export
 // loading, canonical document selection, embedding, point construction, and
-// durable Qdrant upsert. The CLI is only an adapter around this function.
+// acknowledged Qdrant upsert. The CLI is only an adapter around this function.
 func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Result, error) {
 	if opts.ExportPath == "" || opts.Collection == "" || opts.ReportPath == "" {
 		return Result{}, fmt.Errorf("export path, collection, and report path are required")
@@ -49,18 +53,30 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		return Result{}, fmt.Errorf("embedder and store are required")
 	}
 	report := chatgpt.NewIngestReport(opts.ExportPath)
+	progress := model.IngestProgress{}
+	var currentBatch *model.BatchRange
+	result := func() Result {
+		progress.Recount()
+		report.Progress = progress
+		return Result{Documents: progress.Acknowledged, Progress: progress, Report: report}
+	}
 	writeFailure := func(stage string, err error) (Result, error) {
 		report.MarkFailed(stage, err.Error())
-		if opts.ReportPath != "" {
-			_ = report.Write(opts.ReportPath)
+		report.Failure.Batch = currentBatch
+		r := result()
+		cause := &model.IngestError{Stage: stage, Batch: currentBatch, Progress: progress, Err: err}
+		if reportErr := report.Write(opts.ReportPath); reportErr != nil {
+			return r, errors.Join(cause, fmt.Errorf("write failure report: %w", reportErr))
 		}
-		return Result{Report: report}, err
+		return r, cause
 	}
 	exp, err := chatgpt.LoadExport(opts.ExportPath)
 	if err != nil {
 		return writeFailure("load_export", fmt.Errorf("load export: %w", err))
 	}
 	docs, err := chatgpt.ToDocumentsWithReport(exp, report)
+	progress.Classified = report.Summary.DocumentsCreated
+	progress.Skipped = report.Summary.Skipped
 	if err != nil {
 		return writeFailure("classification", fmt.Errorf("convert export: %w", err))
 	}
@@ -70,6 +86,14 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 	if opts.MaxDocs > 0 && len(docs) > opts.MaxDocs {
 		docs = docs[:opts.MaxDocs]
 	}
+	progress.Selected = len(docs)
+	progress.Excluded = progress.Classified - progress.Selected
+	if err := ctx.Err(); err != nil {
+		return writeFailure("canceled", err)
+	}
+	if emb.Dim() <= 0 {
+		return writeFailure("embed", fmt.Errorf("embedding dimension must be positive"))
+	}
 	if err := store.EnsureCollection(ctx, opts.Collection, emb.Dim()); err != nil {
 		return writeFailure("ensure_collection", err)
 	}
@@ -77,6 +101,10 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		j := i + opts.BatchSize
 		if j > len(docs) {
 			j = len(docs)
+		}
+		currentBatch = &model.BatchRange{Start: i, End: j}
+		if err := ctx.Err(); err != nil {
+			return writeFailure("canceled", err)
 		}
 		batch := docs[i:j]
 		texts := make([]string, len(batch))
@@ -87,25 +115,37 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		if err != nil {
 			return writeFailure("embed", fmt.Errorf("embed batch [%d:%d]: %w", i, j, err))
 		}
+		if err := embed.ValidateVectors(vecs, len(batch), emb.Dim()); err != nil {
+			return writeFailure("embed", err)
+		}
 		points := make([]qdrant.Point, 0, len(batch))
 		for k, d := range batch {
-			payload := map[string]any{"doc_id": d.ID, "source": d.Source, "type": d.Type, "timestamp_unix_ms": float64(d.Timestamp), "text": d.Text}
-			for mk, mv := range d.Metadata {
-				payload[mk] = mv
-			}
-			points = append(points, qdrant.Point{ID: PointIDFromDocID(d.ID), Vector: vecs[k], Payload: payload})
+			payload := d.Payload()
+			points = append(points, qdrant.Point{ID: qdrant.NumericID(PointIDFromDocID(d.ID)), Vector: vecs[k], Payload: payload})
+		}
+		if err := ctx.Err(); err != nil {
+			return writeFailure("canceled", err)
 		}
 		if err := store.Upsert(ctx, opts.Collection, points); err != nil {
+			progress.Uncertain += len(batch)
+			progress.UncertainBatches = append(progress.UncertainBatches, *currentBatch)
 			return writeFailure("upsert", fmt.Errorf("upsert batch [%d:%d]: %w", i, j, err))
 		}
+		progress.Acknowledged += len(batch)
 	}
+	currentBatch = nil
+	if err := ctx.Err(); err != nil {
+		return writeFailure("canceled", err)
+	}
+	result()
 	report.MarkCompleted()
 	if opts.ReportPath != "" {
 		if err := report.Write(opts.ReportPath); err != nil {
-			return Result{Report: report}, err
+			report.MarkFailed("write_report", err.Error())
+			return result(), &model.IngestError{Stage: "write_report", Progress: progress, Err: err}
 		}
 	}
-	return Result{Documents: len(docs), Report: report}, nil
+	return result(), nil
 }
 
 func DefaultReportPath() string {

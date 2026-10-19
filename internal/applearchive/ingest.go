@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"personal-search/internal/embed"
 	"personal-search/internal/googlesearch"
 	"personal-search/internal/model"
 	"personal-search/internal/qdrant"
@@ -99,14 +100,11 @@ func Run(ctx context.Context, docs []model.Document, source, collection string, 
 		if err != nil {
 			return completed, err
 		}
-		if len(vectors) != len(texts) {
-			return completed, fmt.Errorf("embedding count mismatch")
+		if err := embed.ValidateVectors(vectors, len(texts), emb.Dim()); err != nil {
+			return completed, err
 		}
 		points := make([]qdrant.Point, len(texts))
 		for i, d := range docs[start:end] {
-			if len(vectors[i]) != emb.Dim() {
-				return completed, fmt.Errorf("embedding dimension mismatch")
-			}
 			payload := map[string]any{}
 			for k, v := range d.Metadata {
 				payload[k] = v
@@ -117,7 +115,11 @@ func Run(ctx context.Context, docs []model.Document, source, collection string, 
 			payload["text"] = d.Text
 			payload["timestamp_unix_ms"] = d.Timestamp
 			payload["embedding_identity"] = emb.EmbeddingIdentity()
-			points[i] = qdrant.Point{ID: pointID(d.ID), Vector: vectors[i], Payload: payload}
+			id, err := qdrant.UUIDID(pointID(d.ID))
+			if err != nil {
+				return completed, err
+			}
+			points[i] = qdrant.Point{ID: id, Vector: vectors[i], Payload: payload}
 		}
 		if err := store.Upsert(ctx, collection, points); err != nil {
 			return completed, fmt.Errorf("upsert completion unknown; may have been applied: %w", err)

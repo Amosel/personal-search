@@ -53,3 +53,9 @@ Qdrant started using existing Docker Compose service, without image pulling, col
 Opt-in repeatable live test: `GOOGLE_SEARCH_LIVE=1 go test ./cmd/server -run '^TestGoogleLiveSynthetic$' -v`. Each run creates and retains its own synthetic collection; never deletes collections. Default tests skip it.
 
 Actual-history indexed this run: **0**. User is waiting for Takeout; full import and actual-history known-record retrieval deferred until delivery. Browser JavaScript syntax checked, visual/browser interaction unverified. MCP source/date forwarding tested with mocks; both generic and compatibility executables exercised for initialization/tool listing with identical responses. Live MCP searches against actual-history data not exercised. No full-history semantic relevance claim.
+
+## Recovering a partial import
+
+Counts describe writes acknowledged in this run, not new unique records or a guarantee of disk durability. A failed upsert may already have been applied: its batch is uncertain. Documents not sent to storage remain not attempted; source skips and MaxDocs exclusions are separate.
+
+After resolving the error, retry the full input with the same collection, model, and options. Stable point IDs replace the same logical records. Reports are privately and atomically replaced; older reports remain readable without inferring storage progress from classification counts.

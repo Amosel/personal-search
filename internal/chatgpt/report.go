@@ -3,6 +3,8 @@ package chatgpt
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"personal-search/internal/model"
 	"time"
 )
 
@@ -18,6 +20,7 @@ type ClassificationReason string
 
 const (
 	ReasonDocumentCreated         ClassificationReason = "document_created"
+	ReasonSkipUnsupportedContent  ClassificationReason = "skip_unsupported_content"
 	ReasonSkipNilMessage          ClassificationReason = "skip_nil_message"
 	ReasonSkipSystemMessage       ClassificationReason = "skip_system_message"
 	ReasonSkipEmptyTextAfterCanon ClassificationReason = "skip_empty_text_after_canonicalize"
@@ -51,27 +54,31 @@ type IngestReportSummary struct {
 }
 
 type IngestReportFailure struct {
-	Stage   string `json:"stage"`
-	Message string `json:"message"`
+	Stage   string            `json:"stage"`
+	Message string            `json:"message"`
+	Batch   *model.BatchRange `json:"batch,omitempty"`
 }
 
 type IngestReport struct {
-	Source     string                `json:"source"`
-	ExportPath string                `json:"export_path"`
-	StartedAt  string                `json:"started_at"`
-	FinishedAt string                `json:"finished_at,omitempty"`
-	Status     string                `json:"status"`
-	Summary    IngestReportSummary   `json:"summary"`
-	Entries    []ClassificationEntry `json:"entries"`
-	Failure    *IngestReportFailure  `json:"failure,omitempty"`
+	SchemaVersion int                   `json:"schema_version"`
+	Progress      model.IngestProgress  `json:"progress"`
+	Source        string                `json:"source"`
+	ExportPath    string                `json:"export_path"`
+	StartedAt     string                `json:"started_at"`
+	FinishedAt    string                `json:"finished_at,omitempty"`
+	Status        string                `json:"status"`
+	Summary       IngestReportSummary   `json:"summary"`
+	Entries       []ClassificationEntry `json:"entries"`
+	Failure       *IngestReportFailure  `json:"failure,omitempty"`
 }
 
 func NewIngestReport(exportPath string) *IngestReport {
 	return &IngestReport{
-		Source:     "chatgpt",
-		ExportPath: exportPath,
-		StartedAt:  time.Now().UTC().Format(time.RFC3339),
-		Status:     "running",
+		SchemaVersion: 2,
+		Source:        "chatgpt",
+		ExportPath:    exportPath,
+		StartedAt:     time.Now().UTC().Format(time.RFC3339),
+		Status:        "running",
 		Summary: IngestReportSummary{
 			ByReason: make(map[string]int),
 		},
@@ -121,5 +128,28 @@ func (r *IngestReport) Write(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	f, err := os.CreateTemp(filepath.Dir(path), ".ingest-report-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	defer f.Close()
+	if _, err = f.Write(data); err != nil {
+		return err
+	}
+	if err = f.Sync(); err != nil {
+		return err
+	}
+	if err = f.Close(); err != nil {
+		return err
+	}
+	if err = os.Rename(f.Name(), path); err != nil {
+		return err
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }

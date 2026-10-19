@@ -44,7 +44,7 @@ func TestGoogleHTTPRoutingAndPreservation(t *testing.T) {
 			if !bytes.Contains(raw, []byte(`"source"`)) || !bytes.Contains(raw, []byte(`"google_search"`)) {
 				t.Errorf("filter=%s", raw)
 			}
-			fmt.Fprint(w, `{"result":[{"id":"point","score":1,"payload":{"doc_id":"event","source":"google_search","text":"known query","timestamp_unix_ms":1767278400123,"account":"personal","url":"https://google.com/search?q=known","provenance":[{"locator":"archive!Search.json","record_index":3,"sha256":"hash"}]}}]}`)
+			fmt.Fprint(w, `{"result":[{"id":1,"score":1,"payload":{"doc_id":"event","source":"google_search","text":"known query","timestamp_unix_ms":1767278400123,"account":"personal","url":"https://google.com/search?q=known","provenance":[{"locator":"archive!Search.json","record_index":3,"sha256":"hash"}]}}]}`)
 		} else {
 			chatCalls++
 			fmt.Fprint(w, `{"result":[{"payload":{"source":"chatgpt","doc_id":"chat","text":"chat result"}}]}`)

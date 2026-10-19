@@ -71,12 +71,13 @@ func (r *SearchRequest) Validate() error {
 }
 
 type SearchResult struct {
-	ID        string         `json:"id"`
-	Score     float64        `json:"score"`
-	Text      string         `json:"text"`
-	Timestamp string         `json:"timestamp"`
-	Source    string         `json:"source"`
-	Metadata  map[string]any `json:"metadata,omitempty"`
+	TextFidelity string         `json:"text_fidelity"`
+	ID           string         `json:"id"`
+	Score        float64        `json:"score"`
+	Text         string         `json:"text"`
+	Timestamp    string         `json:"timestamp"`
+	Source       string         `json:"source"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
 }
 
 type SearchResponse struct {

@@ -49,8 +49,9 @@ func (o *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 		}
 	}
 
-	if o.Client == nil {
-		o.Client = &http.Client{Timeout: 60 * time.Second}
+	client := o.Client
+	if client == nil {
+		client = &http.Client{Timeout: 60 * time.Second}
 	}
 
 	reqBody := openAIRequest{
@@ -74,7 +75,7 @@ func (o *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 	req.Header.Set("Authorization", "Bearer "+o.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := o.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %w", err)
 	}
@@ -89,24 +90,29 @@ func (o *OpenAIEmbedder) Embed(ctx context.Context, texts []string) ([][]float32
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	if len(apiResp.Data) != len(texts) {
+		return nil, &VectorError{Reason: "response count mismatch"}
+	}
+	seen := make(map[int]bool, len(texts))
 	// Build result slice
 	embeddings := make([][]float32, len(texts))
 	for _, item := range apiResp.Data {
 		if item.Index < 0 || item.Index >= len(texts) {
-			return nil, fmt.Errorf("invalid index %d in response", item.Index)
+			return nil, &VectorError{Reason: fmt.Sprintf("invalid index %d in response", item.Index)}
 		}
+		if seen[item.Index] {
+			return nil, &VectorError{Reason: "duplicate response index"}
+		}
+		seen[item.Index] = true
 		embeddings[item.Index] = item.Embedding
 	}
 
-	// Verify all embeddings were returned
-	for i, emb := range embeddings {
-		if emb == nil {
-			return nil, fmt.Errorf("missing embedding for index %d", i)
-		}
-		if len(emb) != o.DimVal {
-			return nil, fmt.Errorf("embedding at index %d has dimension %d, expected %d", i, len(emb), o.DimVal)
-		}
+	if err := ValidateVectors(embeddings, len(texts), o.DimVal); err != nil {
+		return nil, err
 	}
-
 	return embeddings, nil
+}
+
+func (o *OpenAIEmbedder) Profile() Profile {
+	return Profile{Version: 1, Provider: "openai", ModelReference: o.Model, ModelRevision: o.Model, RevisionKind: "provider_reference", Dimensions: o.DimVal, DocumentTransform: "identity-v1", QueryTransform: "identity-v1"}
 }
