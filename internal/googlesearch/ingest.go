@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"personal-search/internal/embed"
@@ -368,6 +369,12 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 	if emb.EmbeddingIdentity() == "" {
 		return 0, fmt.Errorf("embedding identity required")
 	}
+	if err := ctx.Err(); err != nil {
+		return 0, &model.IngestError{Stage: "canceled", Progress: model.IngestProgress{Classified: len(docs), Selected: len(docs), NotAttempted: len(docs)}, Err: err}
+	}
+	if emb.Dim() <= 0 {
+		return 0, fmt.Errorf("embedding dimension must be positive")
+	}
 	if err := store.EnsureCollection(ctx, collection, emb.Dim()); err != nil {
 		return 0, err
 	}
@@ -375,10 +382,19 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 		return 0, err
 	}
 	completed := 0
+	progress := model.IngestProgress{Classified: len(docs), Selected: len(docs)}
+	fail := func(stage string, start, end int, err error) (int, error) {
+		progress.Acknowledged = completed
+		progress.Recount()
+		return completed, &model.IngestError{Stage: stage, Batch: &model.BatchRange{Start: start, End: end}, Progress: progress, Err: err}
+	}
 	for i := 0; i < len(docs); i += batch {
 		end := i + batch
 		if end > len(docs) {
 			end = len(docs)
+		}
+		if err := ctx.Err(); err != nil {
+			return fail("canceled", i, end, err)
 		}
 		texts := make([]string, end-i)
 		for j := i; j < end; j++ {
@@ -386,17 +402,22 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 		}
 		vectors, err := emb.Embed(ctx, texts)
 		if err != nil {
-			return completed, fmt.Errorf("batch [%d:%d]: %w", i, end, err)
+			return fail("embed", i, end, err)
 		}
 		if len(vectors) != len(texts) {
-			return completed, fmt.Errorf("embedding count mismatch")
+			return fail("embed", i, end, fmt.Errorf("embedding count mismatch"))
 		}
 		points := make([]qdrant.Point, len(texts))
 		for j := i; j < end; j++ {
 			d := docs[j]
 			vector := vectors[j-i]
 			if len(vector) != emb.Dim() {
-				return completed, fmt.Errorf("embedding dimension mismatch")
+				return fail("embed", i, end, fmt.Errorf("embedding dimension mismatch"))
+			}
+			for _, x := range vector {
+				if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
+					return fail("embed", i, end, fmt.Errorf("nonfinite embedding value"))
+				}
 			}
 			payload := map[string]any{}
 			for k, v := range d.Metadata {
@@ -410,14 +431,22 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 			payload["timestamp_unix_ms"] = d.Timestamp
 			id, err := qdrant.UUIDID(PointID(d.ID))
 			if err != nil {
-				return completed, err
+				return fail("point_id", i, end, err)
 			}
 			points[j-i] = qdrant.Point{ID: id, Vector: vector, Payload: payload}
 		}
+		if err := ctx.Err(); err != nil {
+			return fail("canceled", i, end, err)
+		}
 		if err := store.Upsert(ctx, collection, points); err != nil {
-			return completed, fmt.Errorf("upsert batch [%d:%d]: completion unknown; may have been applied: %w", i, end, err)
+			progress.Uncertain = end - i
+			progress.UncertainBatches = []model.BatchRange{{Start: i, End: end}}
+			return fail("upsert", i, end, fmt.Errorf("completion unknown; may have been applied: %w", err))
 		}
 		completed += len(points)
+	}
+	if err := ctx.Err(); err != nil {
+		return fail("canceled", len(docs), len(docs), err)
 	}
 	return completed, nil
 }

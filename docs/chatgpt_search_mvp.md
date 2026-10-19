@@ -82,3 +82,9 @@ make chatgpt-status
 - `keywords`
 
 Requests with `keywords` fail explicitly.
+
+## Recovering a partial import
+
+Counts describe writes acknowledged in this run, not new unique records or a guarantee of disk durability. A failed upsert may already have been applied: its batch is uncertain. Documents not sent to storage remain not attempted; source skips and MaxDocs exclusions are separate.
+
+After resolving the error, retry the full input with the same collection, model, and options. Stable point IDs replace the same logical records. Reports are privately and atomically replaced; older reports remain readable without inferring storage progress from classification counts.

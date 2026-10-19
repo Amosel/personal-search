@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -111,6 +112,10 @@ func TestPartialFailureCount(t *testing.T) {
 	n, err := Run(context.Background(), []model.Document{doc(), second}, "google_search", 1, &testEmbedder{embed.FakeEmbedder{DimVal: 8}}, &failedStore{})
 	if err == nil || n != 1 {
 		t.Fatalf("n=%d err=%v", n, err)
+	}
+	var failure *model.IngestError
+	if !errors.As(err, &failure) || failure.Progress.Acknowledged != 1 || failure.Progress.Uncertain != 1 || failure.Progress.NotAttempted != 0 {
+		t.Fatalf("missing progress: %v", err)
 	}
 }
 
