@@ -353,8 +353,15 @@ func toSearchResult(hit qdrant.ScoredPoint) model.SearchResult {
 	if ms, ok := payloadFloat(payload, "timestamp_unix_ms"); ok {
 		ts = time.UnixMilli(int64(ms)).UTC().Format(time.RFC3339Nano)
 	}
+	text, fidelity := payloadString(payload, "text"), "legacy_normalized"
+	if original, ok := payload["original_text"].(string); ok {
+		text, fidelity = original, payloadString(payload, "text_fidelity")
+		if fidelity == "" {
+			fidelity = "unknown"
+		}
+	}
 	return model.SearchResult{
-		ID: id, Score: hit.Score, Text: payloadString(payload, "text"),
+		ID: id, Score: hit.Score, Text: text, TextFidelity: fidelity,
 		Timestamp: ts, Source: payloadString(payload, "source"), Metadata: payload,
 	}
 }

@@ -18,6 +18,7 @@ type ClassificationReason string
 
 const (
 	ReasonDocumentCreated         ClassificationReason = "document_created"
+	ReasonSkipUnsupportedContent  ClassificationReason = "skip_unsupported_content"
 	ReasonSkipNilMessage          ClassificationReason = "skip_nil_message"
 	ReasonSkipSystemMessage       ClassificationReason = "skip_system_message"
 	ReasonSkipEmptyTextAfterCanon ClassificationReason = "skip_empty_text_after_canonicalize"

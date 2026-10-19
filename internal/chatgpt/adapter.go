@@ -3,6 +3,7 @@ package chatgpt
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"personal-search/internal/model"
@@ -58,6 +59,8 @@ func ToDocumentsWithReport(e *Export, report *IngestReport) ([]model.Document, e
 				Metadata:  classified.Metadata,
 			}
 
+			doc.SetExtractedText(classified.OriginalText, classified.Text, "chatgpt-text-v1")
+
 			// SOLE ENFORCEMENT POINT: Validate before adding
 			if err := doc.Validate(); err != nil {
 				failEntry := ClassificationEntry{
@@ -93,10 +96,11 @@ func messageCreateTime(m Message) float64 {
 }
 
 type classifiedMessage struct {
-	Entry       ClassificationEntry
-	Text        string
-	TimestampMS int64
-	Metadata    map[string]any
+	Entry        ClassificationEntry
+	Text         string
+	OriginalText string
+	TimestampMS  int64
+	Metadata     map[string]any
 }
 
 func classifyMessage(conv Conversation, m Message) classifiedMessage {
@@ -123,11 +127,15 @@ func classifyMessage(conv Conversation, m Message) classifiedMessage {
 		return classifiedMessage{Entry: entry}
 	}
 
-	text := extractAndCanonicalizeText(m.Message)
+	original, boundaries, omitted := extractOriginalText(m.Message)
+	text := CanonicalizeText(original)
 	entry.TextLen = len(text)
 	if text == "" {
 		entry.Outcome = OutcomeSkip
 		entry.Reason = ReasonSkipEmptyTextAfterCanon
+		if omitted > 0 && len(boundaries) == 0 {
+			entry.Reason = ReasonSkipUnsupportedContent
+		}
 		return classifiedMessage{Entry: entry}
 	}
 	if timestampMS <= 0 {
@@ -137,8 +145,14 @@ func classifyMessage(conv Conversation, m Message) classifiedMessage {
 	}
 
 	metadata := map[string]any{
-		"author":    m.Message.Author.Role,
-		"thread_id": conv.ID,
+		"author":                 m.Message.Author.Role,
+		"source_node_id":         m.ID,
+		"source_message_id":      m.Message.ID,
+		"source_parts":           m.Message.Content.Parts,
+		"source_part_boundaries": boundaries,
+		"non_text_parts":         omitted,
+		"text_join_policy":       "newline_between_string_parts",
+		"thread_id":              conv.ID,
 	}
 	if conv.Title != "" {
 		metadata["title"] = conv.Title
@@ -149,37 +163,48 @@ func classifyMessage(conv Conversation, m Message) classifiedMessage {
 	entry.Reason = ReasonDocumentCreated
 	entry.DocumentID = model.StableID(conv.ID, m.ID)
 	return classifiedMessage{
-		Entry:       entry,
-		Text:        text,
-		TimestampMS: timestampMS,
-		Metadata:    metadata,
+		Entry:        entry,
+		Text:         text,
+		OriginalText: original,
+		TimestampMS:  timestampMS,
+		Metadata:     metadata,
 	}
 }
 
-// extractAndCanonicalizeText extracts text from message content and canonicalizes it.
-func extractAndCanonicalizeText(m *MsgBody) string {
+// PartBoundary is a byte range in extracted original text; synthetic joins are
+// deliberately outside these ranges. Raw parts retain non-text provenance.
+type PartBoundary struct {
+	Part  int `json:"part"`
+	Start int `json:"start"`
+	End   int `json:"end"`
+}
+
+func extractOriginalText(m *MsgBody) (string, []PartBoundary, int) {
 	if m == nil {
-		return ""
+		return "", nil, 0
 	}
-
-	// Try content.parts first
-	if len(m.Content.Parts) > 0 {
-		var text string
-		for _, part := range m.Content.Parts {
-			switch v := part.(type) {
-			case string:
-				text += v + "\n"
-			default:
-				text += fmt.Sprint(v) + "\n"
-			}
+	if len(m.Content.Parts) == 0 {
+		return m.Content.Text, nil, 0
+	}
+	var b strings.Builder
+	var boundaries []PartBoundary
+	omitted := 0
+	for i, part := range m.Content.Parts {
+		text, ok := part.(string)
+		if !ok {
+			omitted++
+			continue
 		}
-		return CanonicalizeText(text)
+		if len(boundaries) > 0 {
+			b.WriteByte('\n')
+		}
+		start := b.Len()
+		b.WriteString(text)
+		boundaries = append(boundaries, PartBoundary{Part: i, Start: start, End: b.Len()})
 	}
-
-	// Fallback to content.text
-	if m.Content.Text != "" {
-		return CanonicalizeText(m.Content.Text)
-	}
-
-	return ""
+	return b.String(), boundaries, omitted
+}
+func extractAndCanonicalizeText(m *MsgBody) string {
+	original, _, _ := extractOriginalText(m)
+	return CanonicalizeText(original)
 }

@@ -89,10 +89,7 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		}
 		points := make([]qdrant.Point, 0, len(batch))
 		for k, d := range batch {
-			payload := map[string]any{"doc_id": d.ID, "source": d.Source, "type": d.Type, "timestamp_unix_ms": float64(d.Timestamp), "text": d.Text}
-			for mk, mv := range d.Metadata {
-				payload[mk] = mv
-			}
+			payload := d.Payload()
 			points = append(points, qdrant.Point{ID: qdrant.NumericID(PointIDFromDocID(d.ID)), Vector: vecs[k], Payload: payload})
 		}
 		if err := store.Upsert(ctx, opts.Collection, points); err != nil {
