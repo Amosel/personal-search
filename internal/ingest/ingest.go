@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
-	"math"
 	"path/filepath"
 	"personal-search/internal/model"
 
@@ -116,18 +115,8 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 		if err != nil {
 			return writeFailure("embed", fmt.Errorf("embed batch [%d:%d]: %w", i, j, err))
 		}
-		if len(vecs) != len(batch) {
-			return writeFailure("embed", fmt.Errorf("embedding count: got %d want %d", len(vecs), len(batch)))
-		}
-		for _, v := range vecs {
-			if len(v) != emb.Dim() || len(v) == 0 {
-				return writeFailure("embed", fmt.Errorf("embedding dimension mismatch"))
-			}
-			for _, x := range v {
-				if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
-					return writeFailure("embed", fmt.Errorf("nonfinite embedding value"))
-				}
-			}
+		if err := embed.ValidateVectors(vecs, len(batch), emb.Dim()); err != nil {
+			return writeFailure("embed", err)
 		}
 		points := make([]qdrant.Point, 0, len(batch))
 		for k, d := range batch {

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"personal-search/internal/embed"
@@ -404,21 +403,14 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 		if err != nil {
 			return fail("embed", i, end, err)
 		}
-		if len(vectors) != len(texts) {
-			return fail("embed", i, end, fmt.Errorf("embedding count mismatch"))
+		if err := embed.ValidateVectors(vectors, len(texts), emb.Dim()); err != nil {
+			return fail("embed", i, end, err)
 		}
 		points := make([]qdrant.Point, len(texts))
 		for j := i; j < end; j++ {
 			d := docs[j]
 			vector := vectors[j-i]
-			if len(vector) != emb.Dim() {
-				return fail("embed", i, end, fmt.Errorf("embedding dimension mismatch"))
-			}
-			for _, x := range vector {
-				if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
-					return fail("embed", i, end, fmt.Errorf("nonfinite embedding value"))
-				}
-			}
+
 			payload := map[string]any{}
 			for k, v := range d.Metadata {
 				payload[k] = v

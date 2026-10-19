@@ -3,6 +3,7 @@ package embed
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -131,4 +132,32 @@ func (r *recordingRoundTripper) RoundTrip(req *http.Request) (*http.Response, er
 		Body:       io.NopCloser(bytes.NewBufferString(r.body)),
 		Request:    req,
 	}, nil
+}
+
+func TestOpenAIResponseBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		valid      bool
+	}{
+		{"reordered", `{"data":[{"embedding":[0,1,0],"index":1},{"embedding":[1,0,0],"index":0}]}`, true},
+		{"missing", `{"data":[{"embedding":[1,0,0],"index":0}]}`, false},
+		{"duplicate", `{"data":[{"embedding":[1,0,0],"index":0},{"embedding":[0,1,0],"index":0}]}`, false},
+		{"invalid_index", `{"data":[{"embedding":[1,0,0],"index":-1},{"embedding":[0,1,0],"index":1}]}`, false},
+		{"wrong_dimension", `{"data":[{"embedding":[1,0],"index":0},{"embedding":[0,1,0],"index":1}]}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &OpenAIEmbedder{APIKey: "synthetic", Model: "example", DimVal: 3, Client: &http.Client{Transport: &recordingRoundTripper{statusCode: 200, body: tc.body}}}
+			vectors, err := e.Embed(context.Background(), []string{"first", "second"})
+			if tc.valid {
+				if err != nil || len(vectors) != 2 || vectors[0][0] != 1 || vectors[1][1] != 1 {
+					t.Fatalf("vectors=%v err=%v", vectors, err)
+				}
+			} else {
+				var boundary *VectorError
+				if !errors.As(err, &boundary) {
+					t.Fatalf("wanted typed boundary error, got %v", err)
+				}
+			}
+		})
+	}
 }

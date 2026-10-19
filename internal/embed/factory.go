@@ -33,21 +33,7 @@ func New(kind, openAIKey, openAIModel, ollamaURL, ollamaModel string, dim int) (
 		}
 		return &FakeEmbedder{DimVal: dim}, nil
 	case "ollama":
-		if dim == 0 {
-			var err error
-			dim, err = DetectOllamaDimension(context.Background(), ollamaURL, ollamaModel, nil)
-			if err != nil {
-				return nil, fmt.Errorf("infer Ollama dimension: %w", err)
-			}
-		}
-		if dim < 0 {
-			return nil, fmt.Errorf("--dim must be >= 0")
-		}
-		return &OllamaEmbedder{
-			BaseURL: ollamaURL,
-			Model:   ollamaModel,
-			DimVal:  dim,
-		}, nil
+		return NewPinnedOllama(context.Background(), ollamaURL, ollamaModel, dim, nil)
 	default:
 		return nil, fmt.Errorf("unsupported --embedder value: %s", kind)
 	}

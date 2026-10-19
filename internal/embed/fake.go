@@ -58,3 +58,7 @@ func splitWords(s string) []string {
 	}
 	return parts
 }
+
+func (f *FakeEmbedder) Profile() Profile {
+	return Profile{Version: 1, Provider: "fake", ModelReference: "fnv-word-count", ModelRevision: "ascii-case-sensitive-v1", RevisionKind: "test_algorithm", Dimensions: f.DimVal, DocumentTransform: "identity-v1", QueryTransform: "identity-v1"}
+}
