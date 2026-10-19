@@ -32,9 +32,9 @@ func (c *Client) ValidateSourceEmbedding(ctx context.Context, collection, identi
 	if config.Result.Config.Params.Vectors.Size != dim || config.Result.Config.Params.Vectors.Distance != "Cosine" {
 		return fmt.Errorf("collection %s requires matching dimension and Cosine distance", collection)
 	}
-	var offset any
+	var pagination Pagination
 	for {
-		page, err := c.Scroll(ctx, collection, ScrollRequest{Limit: 256, Offset: offset, WithPayload: true})
+		page, err := c.Scroll(ctx, collection, ScrollRequest{Limit: 256, Offset: pagination.Offset, WithPayload: true})
 		if err != nil {
 			return err
 		}
@@ -43,12 +43,12 @@ func (c *Client) ValidateSourceEmbedding(ctx context.Context, collection, identi
 				return fmt.Errorf("collection %s contains incompatible or unmarked embeddings; use a new dedicated collection", collection)
 			}
 		}
-		offset = page.Result.NextPageOffset
-		if offset == nil {
-			return nil
+		more, err := pagination.Advance(page)
+		if err != nil {
+			return err
 		}
-		if len(page.Result.Points) == 0 {
-			return fmt.Errorf("empty embedding validation page with continuation")
+		if !more {
+			return nil
 		}
 	}
 }

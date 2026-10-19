@@ -93,7 +93,7 @@ func Run(ctx context.Context, opts Options, emb embed.Embedder, store Store) (Re
 			for mk, mv := range d.Metadata {
 				payload[mk] = mv
 			}
-			points = append(points, qdrant.Point{ID: PointIDFromDocID(d.ID), Vector: vecs[k], Payload: payload})
+			points = append(points, qdrant.Point{ID: qdrant.NumericID(PointIDFromDocID(d.ID)), Vector: vecs[k], Payload: payload})
 		}
 		if err := store.Upsert(ctx, opts.Collection, points); err != nil {
 			return writeFailure("upsert", fmt.Errorf("upsert batch [%d:%d]: %w", i, j, err))

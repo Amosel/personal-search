@@ -408,7 +408,11 @@ func Run(ctx context.Context, docs []model.Document, collection string, batch in
 			payload["type"] = d.Type
 			payload["text"] = d.Text
 			payload["timestamp_unix_ms"] = d.Timestamp
-			points[j-i] = qdrant.Point{ID: PointID(d.ID), Vector: vector, Payload: payload}
+			id, err := qdrant.UUIDID(PointID(d.ID))
+			if err != nil {
+				return completed, err
+			}
+			points[j-i] = qdrant.Point{ID: id, Vector: vector, Payload: payload}
 		}
 		if err := store.Upsert(ctx, collection, points); err != nil {
 			return completed, fmt.Errorf("upsert batch [%d:%d]: completion unknown; may have been applied: %w", i, end, err)

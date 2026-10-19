@@ -48,7 +48,7 @@ func TestEmbeddingChecksEveryPage(t *testing.T) {
 		}
 		calls++
 		if calls == 1 {
-			fmt.Fprint(w, `{"result":{"points":[{"payload":{"embedding_identity":"model-A","source":"google_search"}}],"next_page_offset":"next"}}`)
+			fmt.Fprint(w, `{"result":{"points":[{"payload":{"embedding_identity":"model-A","source":"google_search"}}],"next_page_offset":2}}`)
 			return
 		}
 		fmt.Fprint(w, `{"result":{"points":[{"payload":{"embedding_identity":"model-B","source":"google_search"}}],"next_page_offset":null}}`)
@@ -61,7 +61,7 @@ func TestEmbeddingChecksEveryPage(t *testing.T) {
 func TestUpsertRequiresCompletion(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"result":{"status":"acknowledged"}}`) }))
 	defer srv.Close()
-	err := New(srv.URL).Upsert(context.Background(), "google_search", []Point{{ID: 1, Vector: []float32{1}}})
+	err := New(srv.URL).Upsert(context.Background(), "google_search", []Point{{ID: NumericID(1), Vector: []float32{1}}})
 	if err == nil || !strings.Contains(err.Error(), "unconfirmed") {
 		t.Fatalf("err=%v", err)
 	}

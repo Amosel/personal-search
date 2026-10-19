@@ -269,7 +269,7 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 			Key: "thread_id", Match: &qdrant.MatchValue{Value: threadID},
 		}, qdrant.FieldCondition{Key: "source", Match: &qdrant.MatchValue{Value: "chatgpt"}}}}
 		messages := make([]model.SearchResult, 0, pageSize)
-		var offset any
+		var pagination qdrant.Pagination
 		truncated := false
 		for len(messages) < maxMessages {
 			limit := pageSize
@@ -277,7 +277,7 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 				limit = remaining
 			}
 			page, err := qc.Scroll(r.Context(), collection, qdrant.ScrollRequest{
-				Filter: filter, Limit: limit, Offset: offset, WithPayload: true,
+				Filter: filter, Limit: limit, Offset: pagination.Offset, WithPayload: true,
 			})
 			if err != nil {
 				http.Error(w, "thread lookup error", http.StatusInternalServerError)
@@ -286,8 +286,12 @@ func newMux(qc *qdrant.Client, emb embed.Embedder, collection, googleCollection,
 			for _, hit := range page.Result.Points {
 				messages = append(messages, toSearchResult(hit))
 			}
-			offset = page.Result.NextPageOffset
-			if offset == nil || len(page.Result.Points) == 0 {
+			more, err := pagination.Advance(page)
+			if err != nil {
+				http.Error(w, "thread pagination error", http.StatusBadGateway)
+				return
+			}
+			if !more {
 				break
 			}
 			if len(messages) >= maxMessages {
@@ -443,18 +447,7 @@ func payloadFloat(payload map[string]any, key string) (float64, bool) {
 	return f, ok
 }
 
-func pointIDToString(v any) string {
-	switch id := v.(type) {
-	case string:
-		return id
-	case float64:
-		return strconv.FormatUint(uint64(id), 10)
-	case int:
-		return strconv.Itoa(id)
-	default:
-		return fmt.Sprintf("%v", id)
-	}
-}
+func pointIDToString(v qdrant.PointID) string { return v.String() }
 
 func fatal(msg string) {
 	fmt.Fprintln(os.Stderr, msg)
