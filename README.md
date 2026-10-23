@@ -49,17 +49,13 @@ brew install socktainer
 brew install docker docker-compose
 ```
 
-Start Socktainer in a separate terminal and leave it running:
+Start Apple Container and Qdrant from the repository root:
 
 ```sh
-socktainer --volume-sync=fsync
+make qdrant-apple-up
 ```
 
-Socktainer starts its backend and registers the `socktainer` Docker context. The Makefile selects that context explicitly, leaving your global Docker context unchanged. Start Qdrant with Compose:
-
-```sh
-make qdrant-up
-```
+This starts the Apple Container service and Socktainer as needed, then starts Qdrant through the `socktainer` Docker context. The context is selected only for this project; the global Docker context is unchanged.
 
 See [local runtime setup](docs/local-runtime.md) for Compose plugin installation, existing database reuse, and other Docker contexts.
 

@@ -18,7 +18,27 @@ CHATGPT_FORMAT ?= json
 CHATGPT_SEARCH_ARGS ?=
 REPORT_OUT ?= ingest_report.json
 
-.PHONY: qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search mcp chatgpt-mcp chatgpt-snapshot chatgpt-status smoke acceptance integration semantic-smoke
+.PHONY: qdrant-apple-up qdrant-up qdrant-down qdrant-status default-status chatgpt-doctor chatgpt-ingest chatgpt-server chatgpt-search mcp chatgpt-mcp chatgpt-snapshot chatgpt-status smoke acceptance integration semantic-smoke
+
+qdrant-apple-up:
+	@set -euo pipefail; \
+	command -v container >/dev/null || { echo "Apple Container CLI missing" >&2; exit 1; }; \
+	command -v socktainer >/dev/null || { echo "Socktainer missing; install with: brew install socktainer" >&2; exit 1; }; \
+	if ! container system status >/dev/null 2>&1; then \
+		container system start; \
+	fi; \
+	if ! docker --context "$(DOCKER_CONTEXT)" info >/dev/null 2>&1; then \
+		log_file="$${TMPDIR:-/tmp}/personal-search-socktainer.log"; \
+		nohup socktainer --volume-sync=fsync >"$$log_file" 2>&1 & \
+		for i in $$(seq 1 50); do \
+			if docker --context "$(DOCKER_CONTEXT)" info >/dev/null 2>&1; then break; fi; \
+			sleep 0.2; \
+		done; \
+		if ! docker --context "$(DOCKER_CONTEXT)" info >/dev/null 2>&1; then \
+			echo "Socktainer did not become ready; see $$log_file" >&2; exit 1; \
+		fi; \
+	fi; \
+	$(MAKE) qdrant-up
 
 qdrant-up:
 	@set -euo pipefail; \

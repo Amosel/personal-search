@@ -1,6 +1,6 @@
-# Local runtime: Socktainer and Docker Compose
+# Local runtime: Apple Container, Socktainer, and Docker Compose
 
-Qdrant uses the committed `docker-compose.yml`. On Apple Silicon macOS 26+, [Socktainer](https://github.com/socktainer/socktainer) provides the Docker API. The Go server and Ollama run on the host.
+Qdrant runs in Apple Container through [Socktainer](https://github.com/socktainer/socktainer), which provides a Docker-compatible API. The Go server and Ollama run on the host.
 
 ## Install
 
@@ -25,24 +25,19 @@ If Docker cannot find Homebrew's Compose plugin, add the directory printed by `b
 "cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]
 ```
 
-## Start
+## Start Qdrant
 
-In a separate terminal, run as your normal user and leave it running:
-
-```sh
-socktainer --volume-sync=fsync
-```
-
-Socktainer automatically starts its backend and registers a Docker context named `socktainer` at `~/.socktainer/container.sock`. The `fsync` setting honors database flushes for named volumes. These instructions use the current user's home and data; Homebrew's service uses a different home/socket, so it is not interchangeable with this startup command.
-
-From the repository root:
+From the repository root, run:
 
 ```sh
-docker --context socktainer info
-make qdrant-up
+make qdrant-apple-up
 ./chatgpt-conversation-search doctor
 ./chatgpt-conversation-search server
 ```
+
+`qdrant-apple-up` starts the Apple Container service when needed, starts Socktainer in the background when needed, creates the `socktainer` Docker context, and starts Qdrant. Socktainer logs go to `$TMPDIR/personal-search-socktainer.log`.
+
+For an already-running Apple Container/Socktainer setup, `make qdrant-up` is sufficient.
 
 Open <http://127.0.0.1:18080/>. For the populated Voice Memos index on this machine, use <http://127.0.0.1:18080/?source=voicememo>.
 
@@ -58,7 +53,7 @@ Stop only the project's database:
 make qdrant-down
 ```
 
-For direct Compose commands, create the external volume once first:
+For direct Compose commands, first ensure Apple Container and Socktainer are running, then create the external volume once:
 
 ```sh
 docker --context socktainer volume create personal-search-qdrant-data
